@@ -1,0 +1,15 @@
+[package]
+name = "orbits"
+version = "0.1.0"
+authors = ["Dzejkop <jakubtrad@gmail.com>"]
+edition = "2021"
+description = "A testing framework inspired by Catch for C++"
+
+[dependencies]
+glam = "*"
+
+[dev-dependencies]
+bevy = "0.9"
+bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
+smooth-bevy-cameras = "0.7.0"
+bevy_egui = "0.19.0"
