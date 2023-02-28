@@ -1,9 +1,9 @@
 [package]
-name = "keplerian-orbits"
+name = "keplerian-elements"
 version = "0.2.0"
 authors = ["Dzejkop <jakubtrad@gmail.com>"]
 edition = "2021"
-repository = "https://github.com/Dzejkop/keplerian-orbits"
+repository = "https://github.com/Dzejkop/keplerian-elements"
 description = "A library for working with orbits and keplerian elements"
 readme = "README.md"
 license = "MIT"

@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy_egui::egui::{DragValue, Ui};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
-use keplerian_orbits::{Orbit, StateVectors};
+use keplerian_elements::{Orbit, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };

@@ -1952,7 +1952,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "keplerian-orbits"
+name = "keplerian-elements"
 version = "0.2.0"
 dependencies = [
  "bevy",
