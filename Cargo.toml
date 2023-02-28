@@ -1,15 +1,18 @@
 [package]
-name = "orbits"
+name = "keplerian-orbits"
 version = "0.1.0"
 authors = ["Dzejkop <jakubtrad@gmail.com>"]
 edition = "2021"
-description = "A testing framework inspired by Catch for C++"
+repository = "https://github.com/Dzejkop/keplerian-orbits"
+description = "A library for working with orbits and keplerian elements"
+readme = "README.md"
+license = "MIT"
 
 [dependencies]
-glam = "*"
+glam = "0.22"
 
 [dev-dependencies]
 bevy = "0.9"
 bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
-smooth-bevy-cameras = "0.7.0"
-bevy_egui = "0.19.0"
+smooth-bevy-cameras = "0.7"
+bevy_egui = "0.19"
