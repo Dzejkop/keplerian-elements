@@ -79,6 +79,61 @@ impl KeplerianElements {
     //     }
     // }
 
+    pub fn state_vectors_to_orbit(sv: StateVectors, mass: f32, time: f32) -> Self {
+        // Position magnitude
+        let rv = sv.position;
+        let vv = sv.velocity;
+        let r = rv.length();
+
+        // Orbital angular momentum
+        let hv = rv.cross(vv);
+        let h = hv.length();
+
+        // Inclination
+        // Equation is i = arccos(hz / h)
+        // but we're in a Y-up coordinate system
+        let i = (hv.y / h).acos();
+
+        // Right ascension of the ascending node
+        let nv = Vec3::Y.cross(hv);
+        let n = nv.length();
+
+        let Ω = 2.0 * PI - (nv.x / n).acos();
+
+        // Eccentricity
+        let μ = Self::standard_gravitational_parameter(mass);
+        let ev = vv.cross(hv) / μ - rv / r;
+        let e = ev.length();
+
+        // Argument of periapsis
+        let ω = 2.0 * PI - (nv.dot(ev) / n * e).acos();
+
+        // True anomaly
+        let v = (rv / r).dot(ev / e).acos();
+
+        // Semi-major axis
+        let a = (1.0 + e * v.cos()) / (r * (1.0 - e.powi(2)));
+
+        // Mean anomaly
+        let t1 = -(1.0 - e.powi(2)).sqrt() * v.sin();
+        let t2 = -e - v.cos();
+        let t3 = 1.0 + e * v.cos();
+
+        let M = f32::atan2(t1, t2) + PI - e * (t1 / t3);
+
+        let mean_motion = Self::mean_motion_static(a, mass);
+        let mean_anomaly_at_epoch_zero = M - mean_motion * time;
+
+        Self {
+            eccentricity: e,
+            semi_major_axis: a,
+            inclination: i,
+            longitude_of_ascending_node: Ω,
+            argument_of_periapsis: ω,
+            mean_anomaly_at_epoch_zero,
+        }
+    }
+
     pub fn ascending_node(&self) -> Vec3 {
         self.position_at_true_anomaly(-self.argument_of_periapsis)
     }
@@ -102,14 +157,20 @@ impl KeplerianElements {
 
     /// https://en.wikipedia.org/wiki/Orbital_period
     pub fn period(&self, mass: f32) -> f32 {
-        let sm_cubed = self.semi_major_axis * self.semi_major_axis * self.semi_major_axis;
+        Self::period_static(self.semi_major_axis, mass)
+    }
 
-        2.0 * PI * (sm_cubed / Self::standard_gravitational_parameter(mass)).sqrt()
+    pub fn period_static(a: f32, mass: f32) -> f32 {
+        2.0 * PI * (a.powi(3) / Self::standard_gravitational_parameter(mass)).sqrt()
     }
 
     /// https://en.wikipedia.org/wiki/Mean_motion
     pub fn mean_motion(&self, mass: f32) -> f32 {
         2.0 * PI / self.period(mass)
+    }
+
+    pub fn mean_motion_static(a: f32, mass: f32) -> f32 {
+        2.0 * PI / Self::period_static(a, mass)
     }
 
     /// https://en.wikipedia.org/wiki/Mean_anomaly
