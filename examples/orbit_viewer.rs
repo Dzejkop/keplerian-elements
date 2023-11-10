@@ -4,12 +4,11 @@ use bevy::prelude::*;
 use bevy_egui::egui::{DragValue, Ui};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
-use keplerian_elements::{Orbit, StateVectors};
+use keplerian_elements::{KeplerianElements, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::LookTransformPlugin;
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -23,6 +22,7 @@ fn main() {
         .add_system(draw_orbits)
         .add_system(update_planets)
         .add_system(update_star)
+        .add_system(draw_axis)
         .run();
 }
 
@@ -36,11 +36,18 @@ struct State {
     epoch_scale: f32,
 
     draw_orbits: bool,
+    show_nodes: bool,
+    show_peri_and_apo_apsis: bool,
+    show_position_and_velocity: bool,
+    velocity_scale: f32,
+
+    draw_axis: bool,
+    axis_scale: f32,
 }
 
 #[derive(Component)]
 struct Planet {
-    orbit: Orbit,
+    orbit: KeplerianElements,
     mass: f32,
 }
 
@@ -78,6 +85,11 @@ fn ui(
                         "Argument of periapsis",
                         &mut planet.orbit.argument_of_periapsis,
                     );
+                    value_slider(
+                        ui,
+                        "Mean anomaly",
+                        &mut planet.orbit.mean_anomaly_at_epoch_zero,
+                    );
                 });
             }
         });
@@ -88,7 +100,28 @@ fn ui(
             value_slider(ui, "Epoch", &mut state.epoch);
             value_slider(ui, "Epoch scale", &mut state.epoch_scale);
             ui.checkbox(&mut state.update_epoch, "Update Epoch");
+
             ui.checkbox(&mut state.draw_orbits, "Draw orbits");
+            if state.draw_orbits {
+                ui.checkbox(&mut state.show_nodes, "Show nodes");
+                ui.checkbox(
+                    &mut state.show_peri_and_apo_apsis,
+                    "Show peri and apo apsis",
+                );
+
+                ui.checkbox(
+                    &mut state.show_position_and_velocity,
+                    "Show position & velocity",
+                );
+                if state.show_position_and_velocity {
+                    value_slider(ui, "Velocity scale", &mut state.velocity_scale);
+                }
+            }
+
+            ui.checkbox(&mut state.draw_axis, "Draw axis");
+            if state.draw_axis {
+                value_slider(ui, "Axis scale", &mut state.axis_scale);
+            }
         });
 
         if let Ok(mut camera) = camera.get_single_mut() {
@@ -143,6 +176,12 @@ fn setup(
         epoch_scale: 1000.0,
         update_epoch: true,
         draw_orbits: true,
+        show_nodes: true,
+        show_peri_and_apo_apsis: true,
+        show_position_and_velocity: true,
+        velocity_scale: 1.0,
+        draw_axis: true,
+        axis_scale: 1000.0,
     });
 
     let sphere = meshes.add(Mesh::from(shape::Icosphere {
@@ -184,23 +223,24 @@ fn setup(
         .insert(NotShadowCaster)
         .insert(Star);
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::BEIGE),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: Orbit {
-                semi_major_axis: 7.0,
-                eccentricity: 0.12,
-                inclination: 0.12,
-                longitude_of_ascending_node: 0.0,
-                argument_of_periapsis: 0.0,
-            },
-            mass: 0.3,
-        })
-        .insert(Name::new("Mercury"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::BEIGE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: Orbit {
+    //             semi_major_axis: 7.0,
+    //             eccentricity: 0.12,
+    //             inclination: 0.12,
+    //             longitude_of_ascending_node: 0.0,
+    //             argument_of_periapsis: 0.0,
+    //             mean_anomaly_at_epoch_zero: 0.0,
+    //         },
+    //         mass: 0.3,
+    //     })
+    //     .insert(Name::new("Mercury"));
 
     commands
         .spawn(PbrBundle {
@@ -209,34 +249,36 @@ fn setup(
             ..Default::default()
         })
         .insert(Planet {
-            orbit: Orbit {
+            orbit: KeplerianElements {
                 semi_major_axis: 10.0,
                 eccentricity: 0.01,
                 inclination: 0.001,
                 longitude_of_ascending_node: 0.0,
                 argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch_zero: 0.0,
             },
             mass: 0.7,
         })
         .insert(Name::new("Earth"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::RED),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: Orbit {
-                semi_major_axis: 20.0,
-                eccentricity: 0.1,
-                inclination: 0.1,
-                longitude_of_ascending_node: 0.0,
-                argument_of_periapsis: 0.0,
-            },
-            mass: 0.6,
-        })
-        .insert(Name::new("Mars"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::RED),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: Orbit {
+    //             semi_major_axis: 20.0,
+    //             eccentricity: 0.1,
+    //             inclination: 0.1,
+    //             longitude_of_ascending_node: 0.0,
+    //             argument_of_periapsis: 0.0,
+    //             mean_anomaly_at_epoch_zero: 0.0,
+    //         },
+    //         mass: 0.6,
+    //     })
+    //     .insert(Name::new("Mars"));
 
     commands
         .spawn(Camera3dBundle::default())
@@ -284,10 +326,18 @@ fn update_star(mut query: Query<&mut Transform, With<Star>>, state: Res<State>) 
     }
 }
 
-fn draw_orbits(mut lines: ResMut<DebugLines>, planets: Query<&Planet>, state: Res<State>) {
+fn draw_orbits(
+    mut lines: ResMut<DebugLines>,
+    planets: Query<&Planet>,
+    state: Res<State>,
+    camera: Query<&GlobalTransform, With<Camera>>,
+) {
     if !state.draw_orbits {
         return;
     }
+
+    let camera = camera.single();
+    let camera_position = camera.translation();
 
     let color = Color::RED;
 
@@ -322,5 +372,110 @@ fn draw_orbits(mut lines: ResMut<DebugLines>, planets: Query<&Planet>, state: Re
 
         // Close the loop
         lines.line_colored(prev_position, first_position, 0.0, color);
+
+        let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
+
+        if state.show_position_and_velocity {
+            let StateVectors { position, velocity } =
+                planet
+                    .orbit
+                    .state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
+
+            debug_arrows.draw_arrow(Vec3::ZERO, position, color);
+            debug_arrows.draw_arrow(
+                position,
+                position + (state.velocity_scale * velocity),
+                color,
+            );
+        }
+
+        if state.show_nodes {
+            let normal = planet.orbit.normal();
+
+            debug_arrows.draw_arrow(Vec3::ZERO, planet.orbit.ascending_node(), Color::YELLOW);
+
+            debug_arrows.draw_arrow(Vec3::ZERO, planet.orbit.periapsis(), Color::RED);
+            debug_arrows.draw_arrow(Vec3::ZERO, planet.orbit.apoapsis(), Color::BLUE);
+
+            debug_arrows.draw_arrow(Vec3::ZERO, 10.0 * normal, Color::GREEN);
+        }
     }
+}
+
+const ARROW_WING_LENGTH: f32 = 1.0;
+const ARROW_WING_ANGLE: f32 = 30.0;
+
+fn draw_axis(mut lines: ResMut<DebugLines>, state: Res<State>) {
+    if !state.draw_axis {
+        return;
+    }
+
+    const ORIGIN: Vec3 = Vec3::ZERO;
+
+    lines.line_colored(ORIGIN, ORIGIN + state.axis_scale * Vec3::X, 0.0, Color::RED);
+    lines.line_colored(
+        ORIGIN,
+        ORIGIN + state.axis_scale * Vec3::Y,
+        0.0,
+        Color::GREEN,
+    );
+    lines.line_colored(
+        ORIGIN,
+        ORIGIN + state.axis_scale * Vec3::Z,
+        0.0,
+        Color::BLUE,
+    );
+}
+
+struct DebugArrows<'a> {
+    lines: &'a mut DebugLines,
+    camera_position: Vec3,
+}
+
+impl<'a> DebugArrows<'a> {
+    pub fn new(lines: &'a mut DebugLines, camera_position: Vec3) -> Self {
+        Self {
+            lines,
+            camera_position,
+        }
+    }
+
+    pub fn draw_arrow(&mut self, start: Vec3, end: Vec3, color: Color) {
+        self.lines.line_colored(start, end, 0.0, color);
+
+        let to_start = (start - end).normalize();
+        let axis_start = closest_point(self.camera_position, start, end);
+        let rot_axis = (self.camera_position - axis_start).normalize();
+
+        let angle = deg2rad(ARROW_WING_ANGLE);
+        let rot_1 = Quat::from_axis_angle(rot_axis, angle);
+        let rot_2 = Quat::from_axis_angle(rot_axis, -angle);
+
+        let wing_1 = (rot_1 * to_start) * ARROW_WING_LENGTH + end;
+        let wing_2 = (rot_2 * to_start) * ARROW_WING_LENGTH + end;
+
+        self.lines.line_colored(end, wing_1, 0.0, color);
+        self.lines.line_colored(end, wing_2, 0.0, color);
+    }
+}
+
+/// Finds the closest point on the line segment defined by `a` and `b` to `pos`.
+/// By definition the lines given by a and b and the pos and found point must be perpendicular.
+fn closest_point(pos: Vec3, a: Vec3, b: Vec3) -> Vec3 {
+    let ab = b - a;
+    let ap = pos - a;
+
+    let t = ap.dot(ab) / ab.dot(ab);
+
+    if t < 0.0 {
+        a
+    } else if t > 1.0 {
+        b
+    } else {
+        a + ab * t
+    }
+}
+
+fn deg2rad(deg: f32) -> f32 {
+    deg * std::f32::consts::PI / 180.0
 }
