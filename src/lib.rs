@@ -52,6 +52,20 @@ impl KeplerianElements {
         let vv = sv.velocity;
         let v = vv.length();
 
+        if print_debug {
+            println!();
+            println!();
+            println!();
+
+            println!("rv = {rv:?}");
+            println!("rv.normalize() = {:?}", rv.normalize());
+            println!("rv.signum() = {:?}", rv.signum());
+
+            println!("vv = {vv:?}");
+            println!("vv.normalize() = {:?}", vv.normalize());
+            println!("vv.signum() = {:?}", vv.signum());
+        }
+
         // Radial velocity
         let vr = vv.dot(rv / r);
 
@@ -92,7 +106,7 @@ impl KeplerianElements {
             println!("nv.x / n = {}", nv.x / n);
         }
 
-        let mut Ω = (nv.x / n).acos();
+        let mut Ω = PI - (nv.x / n).acos();
 
         if print_debug {
             println!("Ω before adjust = {Ω}");
@@ -125,7 +139,7 @@ impl KeplerianElements {
             println!("ev.dot(nv) / (e * n) = {debug_v}");
         }
 
-        let mut ω = (ev.dot(nv) / (e * n)).acos();
+        let mut ω = PI - (ev.dot(nv) / (e * n)).acos();
         // let ω = (nv.dot(ev) / n * e).acos();
         // let ω = if ev.y >= 0.0 { ω } else { TWO_PI - ω };
 
@@ -190,7 +204,7 @@ impl KeplerianElements {
     }
 
     pub fn normal(&self) -> Vec3 {
-        self.perifocal_to_equatorial(Vec3::Y)
+        self.perifocal_to_equatorial(Vec3::Z)
     }
 
     /// https://en.wikipedia.org/wiki/Standard_gravitational_parameter
@@ -355,9 +369,6 @@ impl KeplerianElements {
         let m = Quat::from_axis_angle(Vec3::Z, -Ω);
         p = m.mul_vec3(p);
 
-        // let q = Quat::from_mat3(&((rot_ω * rot_i) * rot_Ω));
-
-        // q.mul_vec3(perifocal)
         p
     }
 

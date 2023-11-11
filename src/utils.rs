@@ -1,5 +1,9 @@
 use glam::Vec3;
 
-pub fn z_up_to_y_up(v: Vec3) -> Vec3 {
-    Vec3::new(-v.x, v.z, v.y)
+pub const fn zup2yup(Vec3 { x, y, z }: Vec3) -> Vec3 {
+    Vec3 { x, y: z, z: y }
+}
+
+pub const fn yup2zup(Vec3 { x, y, z }: Vec3) -> Vec3 {
+    Vec3 { x, y: z, z: y }
 }

@@ -4,11 +4,14 @@ use bevy::prelude::*;
 use bevy_egui::egui::{DragValue, Ui};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use glam::vec3;
+use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::LookTransformPlugin;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -120,23 +123,24 @@ fn ui(
                         }
                         OrbitalRepresentation::StateVectors(sv) => {
                             ui.label("Position");
-                            value_slider(ui, "X", &mut sv.position.x);
-                            value_slider(ui, "Y", &mut sv.position.y);
-                            value_slider(ui, "Z", &mut sv.position.z);
+
+                            let mut p = zup2yup(sv.position);
+
+                            value_slider(ui, "X", &mut p.x);
+                            value_slider(ui, "Y", &mut p.y);
+                            value_slider(ui, "Z", &mut p.z);
+
+                            sv.position = yup2zup(p);
 
                             ui.label("Velocity");
 
-                            let mut vx = sv.velocity.x * state.velocity_scale;
-                            let mut vy = sv.velocity.y * state.velocity_scale;
-                            let mut vz = sv.velocity.z * state.velocity_scale;
+                            let mut v = zup2yup(sv.velocity * state.velocity_scale);
 
-                            value_slider(ui, "Vx", &mut vx);
-                            value_slider(ui, "Vy", &mut vy);
-                            value_slider(ui, "Vz", &mut vz);
+                            value_slider(ui, "Vx", &mut v.x);
+                            value_slider(ui, "Vy", &mut v.y);
+                            value_slider(ui, "Vz", &mut v.z);
 
-                            sv.velocity.x = vx / state.velocity_scale;
-                            sv.velocity.y = vy / state.velocity_scale;
-                            sv.velocity.z = vz / state.velocity_scale;
+                            sv.velocity = yup2zup(v / state.velocity_scale);
                         }
                     }
                 });
@@ -366,6 +370,8 @@ fn update_planets(mut query: Query<(&mut Transform, &Planet)>, state: Res<State>
             OrbitalRepresentation::StateVectors(sv) => sv.clone(),
         };
 
+        let position = zup2yup(position);
+
         transform.translation = position;
         transform.scale = Vec3::ONE * planet.mass;
     }
@@ -413,6 +419,8 @@ fn draw_orbits(
             ..
         } = orbit.state_vectors_at_epoch(state.star_mass, t, state.tolerance);
 
+        let first_position = zup2yup(first_position);
+
         let mut prev_position = first_position.clone();
 
         t += step;
@@ -420,6 +428,8 @@ fn draw_orbits(
         while t < period {
             let StateVectors { position, .. } =
                 orbit.state_vectors_at_epoch(state.star_mass, t, state.tolerance);
+
+            let position = zup2yup(position);
 
             lines.line_colored(prev_position, position, 0.0, color);
 
@@ -437,6 +447,9 @@ fn draw_orbits(
             let StateVectors { position, velocity } =
                 orbit.state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
 
+            let position = zup2yup(position);
+            let velocity = zup2yup(velocity);
+
             debug_arrows.draw_arrow(Vec3::ZERO, position, color);
             debug_arrows.draw_arrow(
                 position,
@@ -446,13 +459,17 @@ fn draw_orbits(
         }
 
         if state.show_nodes {
-            let normal = orbit.normal();
+            let normal = zup2yup(orbit.normal());
 
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.ascending_node(), Color::YELLOW_GREEN);
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.descending_node(), Color::YELLOW);
+            debug_arrows.draw_arrow(
+                Vec3::ZERO,
+                zup2yup(orbit.ascending_node()),
+                Color::YELLOW_GREEN,
+            );
+            debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.descending_node()), Color::YELLOW);
 
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.periapsis(), Color::WHITE);
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.apoapsis(), Color::WHITE);
+            debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.periapsis()), Color::WHITE);
+            debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.apoapsis()), Color::WHITE);
 
             debug_arrows.draw_arrow(Vec3::ZERO, 10.0 * normal, Color::GREEN);
         }
