@@ -65,19 +65,19 @@ impl KeplerianElements {
         let e = ev.length();
 
         // Argument of periapsis
-        // let ω = FRAC_PI_2 - (nv.dot(ev) / n * e).acos();
-        let ω = (nv.dot(ev) / n * e).acos();
+        let ω = FRAC_PI_2 - (nv.dot(ev) / n * e).acos();
+        // let ω = (nv.dot(ev) / n * e).acos();
         // let ω = if ev.y >= 0.0 { ω } else { 2.0 * PI - ω };
 
-        let ω = FRAC_PI_2 - ω;
+        // let ω = FRAC_PI_2 - ω;
 
         // True anomaly
         let v = (rv / r).dot(ev / e).acos();
 
         // Semi-major axis
-        let ϵ = (v.powi(2) / 2.0) - (μ / r); // Specific orbital energy
-        let a = -μ / (2.0 * ϵ);
-        // let a = r * (1.0 + e * v.cos()) / (1.0 - e.powi(2));
+        // let ϵ = (v.powi(2) / 2.0) - (μ / r); // Specific orbital energy
+        // let a = -μ / (2.0 * ϵ);
+        let a = r * (1.0 + e * v.cos()) / (1.0 - e.powi(2));
 
         // Mean anomaly
         let t1 = -(1.0 - e.powi(2)).sqrt() * v.sin();
