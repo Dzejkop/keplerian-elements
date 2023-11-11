@@ -7,6 +7,7 @@ use glam::{vec3, Mat3, Quat, Vec2, Vec3};
 pub mod constants;
 
 use constants::G;
+const TWO_PI: f32 = 2.0 * PI;
 
 /// Data that defines a unique orbit in space
 #[derive(Debug, Clone)]
@@ -14,7 +15,7 @@ pub struct KeplerianElements {
     pub eccentricity: f32,
     pub semi_major_axis: f32,
     pub inclination: f32,
-    pub longitude_of_ascending_node: f32,
+    pub right_ascension_of_the_ascending_node: f32,
     pub argument_of_periapsis: f32,
     pub mean_anomaly_at_epoch_zero: f32,
 }
@@ -38,15 +39,35 @@ impl StateVectors {
 }
 
 impl KeplerianElements {
-    pub fn state_vectors_to_orbit(sv: StateVectors, mass: f32, time: f32) -> Self {
+    pub fn state_vectors_to_orbit(
+        sv: StateVectors,
+        mass: f32,
+        time: f32,
+        print_debug: bool,
+    ) -> Self {
         // Position magnitude
         let rv = sv.position;
-        let vv = sv.velocity;
         let r = rv.length();
+        let vv = sv.velocity;
+        let v = vv.length();
+
+        // Radial velocity
+        let vr = vv.dot(rv / r);
+
+        // Azimuthal velocity
+        let _vz = (v.powi(2) - vr.powi(2)).sqrt();
 
         // Orbital angular momentum
+        // This vector should point in the normal direction of the orbit
         let hv = rv.cross(vv);
         let h = hv.length();
+
+        if print_debug {
+            println!();
+            println!("hv = {hv:?}");
+            println!("hv.normalize() = {:?}", hv.normalize());
+            println!("hv.signum() = {:?}", hv.signum());
+        }
 
         // Inclination
         // Equation is i = arccos(hz / h)
@@ -54,22 +75,55 @@ impl KeplerianElements {
         let i = (hv.y / h).acos();
 
         // Right ascension of the ascending node
+
+        // N vector and magnitude - it's the vector
+        // parallel to the node line
         let nv = Vec3::Y.cross(hv);
         let n = nv.length();
 
-        let Ω = PI - (nv.x / n).acos();
+        if print_debug {
+            println!("nv = {nv:?}");
+            println!("nv.normalize() = {:?}", nv.normalize());
+            println!("nv.signum() = {:?}", nv.signum());
+        }
+
+        // We find the angle between the node line & the X axis
+        let mut Ω = (nv.x / n).acos();
+
+        if print_debug {
+            println!("Ω before adjust = {Ω}");
+        }
+
+        // The equation uses nv.y but we're in a Y-up coordinate system
+        // therefore Y and Z are flipped
+        if nv.z >= 0.0 {
+            Ω = TWO_PI - Ω;
+        }
+
+        if print_debug {
+            println!("Ω = {Ω}");
+        }
 
         // Eccentricity
         let μ = Self::standard_gravitational_parameter(mass);
-        let ev = vv.cross(hv) / μ - rv / r;
+        let ev = (1.0 / μ) * ((v.powi(2) - μ / r) * rv - r * vr * vv);
+
+        if print_debug {
+            println!("ev = {ev:?}");
+            println!("ev.normalize() = {:?}", ev.normalize());
+            println!("ev.signum() = {:?}", ev.signum());
+        }
+
         let e = ev.length();
 
         // Argument of periapsis
-        let ω = FRAC_PI_2 - (nv.dot(ev) / n * e).acos();
+        let mut ω = (ev.dot(nv) / (e * n)).acos();
         // let ω = (nv.dot(ev) / n * e).acos();
-        // let ω = if ev.y >= 0.0 { ω } else { 2.0 * PI - ω };
+        // let ω = if ev.y >= 0.0 { ω } else { TWO_PI - ω };
 
-        // let ω = FRAC_PI_2 - ω;
+        if ev.y >= 0.0 {
+            ω = TWO_PI - ω;
+        }
 
         // True anomaly
         let v = (rv / r).dot(ev / e).acos();
@@ -84,7 +138,7 @@ impl KeplerianElements {
         let t2 = -e - v.cos();
         let t3 = 1.0 + e * v.cos();
 
-        let M = f32::atan2(t1, t2) + PI - e * (t1 / t3);
+        let M = f32::atan2(t1, t2) + PI + e * (t1 / t3);
 
         let mean_motion = Self::mean_motion_static(a, mass);
         let mean_anomaly_at_epoch_zero = M - mean_motion * time;
@@ -93,14 +147,18 @@ impl KeplerianElements {
             eccentricity: e,
             semi_major_axis: a,
             inclination: i,
-            longitude_of_ascending_node: Ω,
+            right_ascension_of_the_ascending_node: Ω,
             argument_of_periapsis: ω,
             mean_anomaly_at_epoch_zero,
         }
     }
 
     pub fn ascending_node(&self) -> Vec3 {
-        self.position_at_true_anomaly(-self.argument_of_periapsis)
+        self.position_at_true_anomaly(PI + FRAC_PI_2 + self.argument_of_periapsis)
+    }
+
+    pub fn descending_node(&self) -> Vec3 {
+        self.position_at_true_anomaly(FRAC_PI_2 + self.argument_of_periapsis)
     }
 
     pub fn periapsis(&self) -> Vec3 {
@@ -126,7 +184,7 @@ impl KeplerianElements {
     }
 
     pub fn period_static(a: f32, mass: f32) -> f32 {
-        2.0 * PI * (a.powi(3) / Self::standard_gravitational_parameter(mass)).sqrt()
+        TWO_PI * (a.powi(3) / Self::standard_gravitational_parameter(mass)).sqrt()
     }
 
     /// https://en.wikipedia.org/wiki/Mean_motion
@@ -230,13 +288,13 @@ impl KeplerianElements {
         let r = (a * (1.0 - e.powi(2))) / (1.0 + e * v.cos());
 
         // Perifocal coordinates
-        let x = r * v.cos();
-        let y = r * v.sin();
+        let q = r * v.cos();
+        let p = r * v.sin();
 
         // Y-up coordinate system
-        let p = vec3(x, 0.0, y);
+        let position = vec3(p, 0.0, q);
 
-        self.perifocal_to_equatorial(p)
+        self.perifocal_to_equatorial(position)
     }
 
     pub fn velocity_at_true_anomaly(&self, mass: f32, v: f32) -> Vec3 {
@@ -246,25 +304,25 @@ impl KeplerianElements {
 
         let v_mag = μ / h;
 
-        let vx = -v_mag * v.sin();
-        let vy = v_mag * (e + v.cos());
+        let vq = -v_mag * v.sin();
+        let vp = v_mag * (e + v.cos());
 
         // Y-up coordinate system
-        let velocity = vec3(vx, 0.0, vy);
+        let velocity = vec3(vp, 0.0, vq);
 
         self.perifocal_to_equatorial(velocity)
     }
 
     #[inline(always)]
     pub fn perifocal_to_equatorial(&self, perifocal: Vec3) -> Vec3 {
-        let Ω = self.longitude_of_ascending_node;
+        let Ω = self.right_ascension_of_the_ascending_node;
         let i = self.inclination;
         let ω = self.argument_of_periapsis;
 
         // Compute rotation matrices to transform perifocal frame to ecliptic frame
-        let rot_Ω = Mat3::from_axis_angle(-Vec3::Y, Ω);
-        let rot_i = Mat3::from_axis_angle(Vec3::X, i);
-        let rot_ω = Mat3::from_axis_angle(-Vec3::Y, ω);
+        let rot_Ω = Mat3::from_axis_angle(Vec3::Y, -Ω);
+        let rot_i = Mat3::from_axis_angle(Vec3::X, -i);
+        let rot_ω = Mat3::from_axis_angle(Vec3::Y, -ω);
 
         // Compute rotation quaternion
         let q = Quat::from_mat3(&(rot_Ω * rot_i * rot_ω));

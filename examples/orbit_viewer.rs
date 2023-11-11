@@ -88,6 +88,7 @@ fn ui(
                                         sv.clone(),
                                         state.star_mass,
                                         state.epoch,
+                                        true,
                                     ),
                                 )
                             }
@@ -108,7 +109,7 @@ fn ui(
                             value_slider(
                                 ui,
                                 "Longitude of ascending node",
-                                &mut orbit.longitude_of_ascending_node,
+                                &mut orbit.right_ascension_of_the_ascending_node,
                             );
                             value_slider(
                                 ui,
@@ -218,7 +219,7 @@ fn setup(
     });
 
     commands.insert_resource(State {
-        tolerance: 0.1,
+        tolerance: 0.0001,
         star_mass: 4.0,
         epoch: 0.0,
         epoch_scale: 1000.0,
@@ -301,7 +302,7 @@ fn setup(
                 semi_major_axis: 10.0,
                 eccentricity: 0.01,
                 inclination: 0.001,
-                longitude_of_ascending_node: 0.0,
+                right_ascension_of_the_ascending_node: 0.0,
                 argument_of_periapsis: 0.0,
                 mean_anomaly_at_epoch_zero: 0.0,
             }),
@@ -396,9 +397,12 @@ fn draw_orbits(
 
         let orbit = match &planet.orbit {
             OrbitalRepresentation::Keplerian(orbit) => orbit.clone(),
-            OrbitalRepresentation::StateVectors(sv) => {
-                KeplerianElements::state_vectors_to_orbit(sv.clone(), state.star_mass, state.epoch)
-            }
+            OrbitalRepresentation::StateVectors(sv) => KeplerianElements::state_vectors_to_orbit(
+                sv.clone(),
+                state.star_mass,
+                state.epoch,
+                false,
+            ),
         };
 
         let period = orbit.period(state.star_mass);
@@ -444,10 +448,11 @@ fn draw_orbits(
         if state.show_nodes {
             let normal = orbit.normal();
 
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.ascending_node(), Color::YELLOW);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.ascending_node(), Color::YELLOW_GREEN);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.descending_node(), Color::YELLOW);
 
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.periapsis(), Color::RED);
-            debug_arrows.draw_arrow(Vec3::ZERO, orbit.apoapsis(), Color::BLUE);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.periapsis(), Color::WHITE);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.apoapsis(), Color::WHITE);
 
             debug_arrows.draw_arrow(Vec3::ZERO, 10.0 * normal, Color::GREEN);
         }
