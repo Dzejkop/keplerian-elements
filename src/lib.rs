@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::PI;
 
-use glam::{vec3, Mat3, Quat, Vec2, Vec3};
+use glam::{vec3, Mat3, Vec3};
 
 pub mod constants;
 pub mod utils;
@@ -40,31 +40,12 @@ impl StateVectors {
 }
 
 impl KeplerianElements {
-    pub fn state_vectors_to_orbit(
-        sv: StateVectors,
-        mass: f32,
-        time: f32,
-        print_debug: bool,
-    ) -> Self {
+    pub fn state_vectors_to_orbit(sv: StateVectors, mass: f32, time: f32) -> Self {
         // Position magnitude
         let rv = sv.position;
         let r = rv.length();
         let vv = sv.velocity;
         let v = vv.length();
-
-        if print_debug {
-            println!();
-            println!();
-            println!();
-
-            println!("rv = {rv:?}");
-            println!("rv.normalize() = {:?}", rv.normalize());
-            println!("rv.signum() = {:?}", rv.signum());
-
-            println!("vv = {vv:?}");
-            println!("vv.normalize() = {:?}", vv.normalize());
-            println!("vv.signum() = {:?}", vv.signum());
-        }
 
         // Radial velocity
         let vr = vv.dot(rv / r);
@@ -77,13 +58,6 @@ impl KeplerianElements {
         let hv = rv.cross(vv);
         let h = hv.length();
 
-        if print_debug {
-            println!();
-            println!("hv = {hv:?}");
-            println!("hv.normalize() = {:?}", hv.normalize());
-            println!("hv.signum() = {:?}", hv.signum());
-        }
-
         // Inclination
         // Equation is i = arccos(hz / h)
         let i = (hv.z / h).acos();
@@ -95,64 +69,24 @@ impl KeplerianElements {
         let nv = Vec3::Z.cross(hv);
         let n = nv.length();
 
-        if print_debug {
-            println!("nv = {nv:?}");
-            println!("nv.normalize() = {:?}", nv.normalize());
-            println!("nv.signum() = {:?}", nv.signum());
-        }
-
         // We find the angle between the node line & the X axis
-        if print_debug {
-            println!("nv.x / n = {}", nv.x / n);
-        }
-
         let mut Ω = PI - (nv.x / n).acos();
-
-        if print_debug {
-            println!("Ω before adjust = {Ω}");
-        }
 
         if nv.y < 0.0 {
             Ω = TWO_PI - Ω;
-        }
-
-        if print_debug {
-            println!("Ω = {Ω}");
         }
 
         // Eccentricity
         let μ = Self::standard_gravitational_parameter(mass);
         let ev = (1.0 / μ) * ((v.powi(2) - μ / r) * rv - r * vr * vv);
 
-        if print_debug {
-            println!("ev = {ev:?}");
-            println!("ev.normalize() = {:?}", ev.normalize());
-            println!("ev.signum() = {:?}", ev.signum());
-        }
-
         let e = ev.length();
 
         // Argument of periapsis
-
-        if print_debug {
-            let debug_v = ev.dot(nv) / (e * n);
-            println!("ev.dot(nv) / (e * n) = {debug_v}");
-        }
-
         let mut ω = PI - (ev.dot(nv) / (e * n)).acos();
-        // let ω = (nv.dot(ev) / n * e).acos();
-        // let ω = if ev.y >= 0.0 { ω } else { TWO_PI - ω };
-
-        if print_debug {
-            println!("ω before adjust = {ω}");
-        }
 
         if ev.z < 0.0 {
             ω = TWO_PI - ω;
-        }
-
-        if print_debug {
-            println!("ω = {ω}");
         }
 
         // True anomaly
@@ -162,9 +96,6 @@ impl KeplerianElements {
             v = TWO_PI - v;
         }
 
-        // Semi-major axis
-        // let ϵ = (v.powi(2) / 2.0) - (μ / r); // Specific orbital energy
-        // let a = -μ / (2.0 * ϵ);
         let a = r * (1.0 + e * v.cos()) / (1.0 - e.powi(2));
 
         // Mean anomaly
@@ -351,25 +282,9 @@ impl KeplerianElements {
         let i = self.inclination;
         let ω = self.argument_of_periapsis;
 
-        // Compute rotation matrices to transform perifocal frame to ecliptic frame
-        let rot_ω = Mat3::from_axis_angle(Vec3::Z, -ω);
-        let rot_i = Mat3::from_axis_angle(Vec3::X, -i);
-        let rot_Ω = Mat3::from_axis_angle(Vec3::Z, -Ω);
+        let m = Mat3::from_rotation_z(-Ω) * (Mat3::from_rotation_x(-i) * Mat3::from_rotation_z(-ω));
 
-        // Compute rotation quaternion
-
-        let mut p = perifocal;
-
-        let m = Quat::from_axis_angle(Vec3::Z, -ω);
-        p = m.mul_vec3(p);
-
-        let m = Quat::from_axis_angle(Vec3::X, -i);
-        p = m.mul_vec3(p);
-
-        let m = Quat::from_axis_angle(Vec3::Z, -Ω);
-        p = m.mul_vec3(p);
-
-        p
+        m.mul_vec3(perifocal)
     }
 
     pub fn specific_angular_momentum(&self, mass: f32) -> f32 {

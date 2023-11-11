@@ -91,7 +91,6 @@ fn ui(
                                         sv.clone(),
                                         state.star_mass,
                                         state.epoch,
-                                        true,
                                     ),
                                 )
                             }
@@ -403,12 +402,9 @@ fn draw_orbits(
 
         let orbit = match &planet.orbit {
             OrbitalRepresentation::Keplerian(orbit) => orbit.clone(),
-            OrbitalRepresentation::StateVectors(sv) => KeplerianElements::state_vectors_to_orbit(
-                sv.clone(),
-                state.star_mass,
-                state.epoch,
-                false,
-            ),
+            OrbitalRepresentation::StateVectors(sv) => {
+                KeplerianElements::state_vectors_to_orbit(sv.clone(), state.star_mass, state.epoch)
+            }
         };
 
         let period = orbit.period(state.star_mass);
