@@ -71,14 +71,13 @@ impl KeplerianElements {
 
         // Inclination
         // Equation is i = arccos(hz / h)
-        // but we're in a Y-up coordinate system
-        let i = (hv.y / h).acos();
+        let i = (hv.z / h).acos();
 
         // Right ascension of the ascending node
 
         // N vector and magnitude - it's the vector
         // parallel to the node line
-        let nv = Vec3::Y.cross(hv);
+        let nv = Vec3::Z.cross(hv);
         let n = nv.length();
 
         if print_debug {
@@ -88,15 +87,17 @@ impl KeplerianElements {
         }
 
         // We find the angle between the node line & the X axis
+        if print_debug {
+            println!("nv.x / n = {}", nv.x / n);
+        }
+
         let mut Ω = (nv.x / n).acos();
 
         if print_debug {
             println!("Ω before adjust = {Ω}");
         }
 
-        // The equation uses nv.y but we're in a Y-up coordinate system
-        // therefore Y and Z are flipped
-        if nv.z >= 0.0 {
+        if nv.y < 0.0 {
             Ω = TWO_PI - Ω;
         }
 
@@ -121,7 +122,7 @@ impl KeplerianElements {
         // let ω = (nv.dot(ev) / n * e).acos();
         // let ω = if ev.y >= 0.0 { ω } else { TWO_PI - ω };
 
-        if ev.y >= 0.0 {
+        if ev.z < 0.0 {
             ω = TWO_PI - ω;
         }
 
@@ -154,11 +155,11 @@ impl KeplerianElements {
     }
 
     pub fn ascending_node(&self) -> Vec3 {
-        self.position_at_true_anomaly(PI + FRAC_PI_2 + self.argument_of_periapsis)
+        self.position_at_true_anomaly(PI + self.argument_of_periapsis)
     }
 
     pub fn descending_node(&self) -> Vec3 {
-        self.position_at_true_anomaly(FRAC_PI_2 + self.argument_of_periapsis)
+        self.position_at_true_anomaly(self.argument_of_periapsis)
     }
 
     pub fn periapsis(&self) -> Vec3 {
@@ -288,11 +289,10 @@ impl KeplerianElements {
         let r = (a * (1.0 - e.powi(2))) / (1.0 + e * v.cos());
 
         // Perifocal coordinates
-        let q = r * v.cos();
-        let p = r * v.sin();
+        let p = r * v.cos();
+        let q = r * v.sin();
 
-        // Y-up coordinate system
-        let position = vec3(p, 0.0, q);
+        let position = vec3(p, q, 0.0);
 
         self.perifocal_to_equatorial(position)
     }
@@ -304,11 +304,10 @@ impl KeplerianElements {
 
         let v_mag = μ / h;
 
-        let vq = -v_mag * v.sin();
-        let vp = v_mag * (e + v.cos());
+        let vp = -v_mag * v.sin();
+        let vq = v_mag * (e + v.cos());
 
-        // Y-up coordinate system
-        let velocity = vec3(vp, 0.0, vq);
+        let velocity = vec3(vp, vq, 0.0);
 
         self.perifocal_to_equatorial(velocity)
     }
@@ -320,14 +319,27 @@ impl KeplerianElements {
         let ω = self.argument_of_periapsis;
 
         // Compute rotation matrices to transform perifocal frame to ecliptic frame
-        let rot_Ω = Mat3::from_axis_angle(Vec3::Y, -Ω);
+        let rot_ω = Mat3::from_axis_angle(Vec3::Z, -ω);
         let rot_i = Mat3::from_axis_angle(Vec3::X, -i);
-        let rot_ω = Mat3::from_axis_angle(Vec3::Y, -ω);
+        let rot_Ω = Mat3::from_axis_angle(Vec3::Z, -Ω);
 
         // Compute rotation quaternion
-        let q = Quat::from_mat3(&(rot_Ω * rot_i * rot_ω));
 
-        q.mul_vec3(perifocal)
+        let mut p = perifocal;
+
+        let m = Quat::from_axis_angle(Vec3::Z, -ω);
+        p = m.mul_vec3(p);
+
+        let m = Quat::from_axis_angle(Vec3::X, -i);
+        p = m.mul_vec3(p);
+
+        let m = Quat::from_axis_angle(Vec3::Z, -Ω);
+        p = m.mul_vec3(p);
+
+        // let q = Quat::from_mat3(&((rot_ω * rot_i) * rot_Ω));
+
+        // q.mul_vec3(perifocal)
+        p
     }
 
     pub fn specific_angular_momentum(&self, mass: f32) -> f32 {
