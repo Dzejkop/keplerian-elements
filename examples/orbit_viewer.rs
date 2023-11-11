@@ -47,8 +47,13 @@ struct State {
 
 #[derive(Component)]
 struct Planet {
-    orbit: KeplerianElements,
+    orbit: OrbitalRepresentation,
     mass: f32,
+}
+
+enum OrbitalRepresentation {
+    Keplerian(KeplerianElements),
+    StateVectors(StateVectors),
 }
 
 #[derive(Component)]
@@ -66,30 +71,73 @@ fn ui(
                 ui.collapsing(name.as_str(), |ui| {
                     ui.label(name.to_string());
 
-                    value_slider_min_max(
-                        ui,
-                        "Semi major axis",
-                        &mut planet.orbit.semi_major_axis,
-                        f32::EPSILON,
-                        f32::MAX,
-                    );
-                    value_slider(ui, "Eccentricity", &mut planet.orbit.eccentricity);
-                    value_slider(ui, "Inclination", &mut planet.orbit.inclination);
-                    value_slider(
-                        ui,
-                        "Longitude of ascending node",
-                        &mut planet.orbit.longitude_of_ascending_node,
-                    );
-                    value_slider(
-                        ui,
-                        "Argument of periapsis",
-                        &mut planet.orbit.argument_of_periapsis,
-                    );
-                    value_slider(
-                        ui,
-                        "Mean anomaly",
-                        &mut planet.orbit.mean_anomaly_at_epoch_zero,
-                    );
+                    if ui.button("Flip representation").clicked() {
+                        planet.orbit = match &planet.orbit {
+                            OrbitalRepresentation::Keplerian(keplerian) => {
+                                OrbitalRepresentation::StateVectors(
+                                    keplerian.state_vectors_at_epoch(
+                                        state.star_mass,
+                                        state.epoch,
+                                        state.tolerance,
+                                    ),
+                                )
+                            }
+                            OrbitalRepresentation::StateVectors(sv) => {
+                                OrbitalRepresentation::Keplerian(
+                                    KeplerianElements::state_vectors_to_orbit(
+                                        sv.clone(),
+                                        state.star_mass,
+                                        state.epoch,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+
+                    match &mut planet.orbit {
+                        OrbitalRepresentation::Keplerian(orbit) => {
+                            value_slider_min_max(
+                                ui,
+                                "Semi major axis",
+                                &mut orbit.semi_major_axis,
+                                f32::EPSILON,
+                                f32::MAX,
+                            );
+                            value_slider(ui, "Eccentricity", &mut orbit.eccentricity);
+                            value_slider(ui, "Inclination", &mut orbit.inclination);
+                            value_slider(
+                                ui,
+                                "Longitude of ascending node",
+                                &mut orbit.longitude_of_ascending_node,
+                            );
+                            value_slider(
+                                ui,
+                                "Argument of periapsis",
+                                &mut orbit.argument_of_periapsis,
+                            );
+                            value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch_zero);
+                        }
+                        OrbitalRepresentation::StateVectors(sv) => {
+                            ui.label("Position");
+                            value_slider(ui, "X", &mut sv.position.x);
+                            value_slider(ui, "Y", &mut sv.position.y);
+                            value_slider(ui, "Z", &mut sv.position.z);
+
+                            ui.label("Velocity");
+
+                            let mut vx = sv.velocity.x * state.velocity_scale;
+                            let mut vy = sv.velocity.y * state.velocity_scale;
+                            let mut vz = sv.velocity.z * state.velocity_scale;
+
+                            value_slider(ui, "Vx", &mut vx);
+                            value_slider(ui, "Vy", &mut vy);
+                            value_slider(ui, "Vz", &mut vz);
+
+                            sv.velocity.x = vx / state.velocity_scale;
+                            sv.velocity.y = vy / state.velocity_scale;
+                            sv.velocity.z = vz / state.velocity_scale;
+                        }
+                    }
                 });
             }
         });
@@ -179,7 +227,7 @@ fn setup(
         show_nodes: true,
         show_peri_and_apo_apsis: true,
         show_position_and_velocity: true,
-        velocity_scale: 1.0,
+        velocity_scale: 10_000_000.00,
         draw_axis: true,
         axis_scale: 1000.0,
     });
@@ -249,14 +297,14 @@ fn setup(
             ..Default::default()
         })
         .insert(Planet {
-            orbit: KeplerianElements {
+            orbit: OrbitalRepresentation::Keplerian(KeplerianElements {
                 semi_major_axis: 10.0,
                 eccentricity: 0.01,
                 inclination: 0.001,
                 longitude_of_ascending_node: 0.0,
                 argument_of_periapsis: 0.0,
                 mean_anomaly_at_epoch_zero: 0.0,
-            },
+            }),
             mass: 0.7,
         })
         .insert(Name::new("Earth"));
@@ -310,10 +358,12 @@ fn update_epoch(time: Res<Time>, mut state: ResMut<State>) {
 
 fn update_planets(mut query: Query<(&mut Transform, &Planet)>, state: Res<State>) {
     for (mut transform, planet) in query.iter_mut() {
-        let StateVectors { position, .. } =
-            planet
-                .orbit
-                .state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
+        let StateVectors { position, .. } = match &planet.orbit {
+            OrbitalRepresentation::Keplerian(keplerian) => {
+                keplerian.state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance)
+            }
+            OrbitalRepresentation::StateVectors(sv) => sv.clone(),
+        };
 
         transform.translation = position;
         transform.scale = Vec3::ONE * planet.mass;
@@ -343,15 +393,21 @@ fn draw_orbits(
 
     for planet in planets.iter() {
         let mut t = 0.0;
-        let period = planet.orbit.period(state.star_mass);
+
+        let orbit = match &planet.orbit {
+            OrbitalRepresentation::Keplerian(orbit) => orbit.clone(),
+            OrbitalRepresentation::StateVectors(sv) => {
+                KeplerianElements::state_vectors_to_orbit(sv.clone(), state.star_mass, state.epoch)
+            }
+        };
+
+        let period = orbit.period(state.star_mass);
         let step = period / 100.0;
 
         let StateVectors {
             position: first_position,
             ..
-        } = planet
-            .orbit
-            .state_vectors_at_epoch(state.star_mass, t, state.tolerance);
+        } = orbit.state_vectors_at_epoch(state.star_mass, t, state.tolerance);
 
         let mut prev_position = first_position.clone();
 
@@ -359,9 +415,7 @@ fn draw_orbits(
 
         while t < period {
             let StateVectors { position, .. } =
-                planet
-                    .orbit
-                    .state_vectors_at_epoch(state.star_mass, t, state.tolerance);
+                orbit.state_vectors_at_epoch(state.star_mass, t, state.tolerance);
 
             lines.line_colored(prev_position, position, 0.0, color);
 
@@ -377,9 +431,7 @@ fn draw_orbits(
 
         if state.show_position_and_velocity {
             let StateVectors { position, velocity } =
-                planet
-                    .orbit
-                    .state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
+                orbit.state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
 
             debug_arrows.draw_arrow(Vec3::ZERO, position, color);
             debug_arrows.draw_arrow(
@@ -390,12 +442,12 @@ fn draw_orbits(
         }
 
         if state.show_nodes {
-            let normal = planet.orbit.normal();
+            let normal = orbit.normal();
 
-            debug_arrows.draw_arrow(Vec3::ZERO, planet.orbit.ascending_node(), Color::YELLOW);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.ascending_node(), Color::YELLOW);
 
-            debug_arrows.draw_arrow(Vec3::ZERO, planet.orbit.periapsis(), Color::RED);
-            debug_arrows.draw_arrow(Vec3::ZERO, planet.orbit.apoapsis(), Color::BLUE);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.periapsis(), Color::RED);
+            debug_arrows.draw_arrow(Vec3::ZERO, orbit.apoapsis(), Color::BLUE);
 
             debug_arrows.draw_arrow(Vec3::ZERO, 10.0 * normal, Color::GREEN);
         }

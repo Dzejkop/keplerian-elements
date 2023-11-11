@@ -9,6 +9,7 @@ pub mod constants;
 use constants::G;
 
 /// Data that defines a unique orbit in space
+#[derive(Debug, Clone)]
 pub struct KeplerianElements {
     pub eccentricity: f32,
     pub semi_major_axis: f32,
@@ -24,6 +25,7 @@ pub struct Orbit {
     pub elements: KeplerianElements,
 }
 
+#[derive(Debug, Clone)]
 pub struct StateVectors {
     pub position: Vec3,
     pub velocity: Vec3,
@@ -36,49 +38,6 @@ impl StateVectors {
 }
 
 impl KeplerianElements {
-    // pub fn state_vectors_to_orbit(state_vectors: StateVectors, central_body_mass: f32) -> Self {
-    //     // Compute the magnitude of the position vector and velocity vector
-    //     let r_mag = state_vectors.position.length();
-    //     let v_mag = state_vectors.velocity.length();
-
-    //     // Compute the specific angular momentum vector
-    //     let h = state_vectors.position.cross(state_vectors.velocity);
-    //     let h_mag = h.length();
-
-    //     // Compute the eccentricity vector
-    //     let e = (state_vectors.velocity.cross(h) / central_body_mass)
-    //         - (state_vectors.position / r_mag);
-    //     let e_mag = e.length();
-
-    //     // Compute the semi-major axis
-    //     let a = 1.0 / (2.0 / r_mag - v_mag * v_mag / (central_body_mass * central_body_mass));
-
-    //     // Compute the inclination
-    //     let i = h.z / h_mag;
-
-    //     // Compute the longitude of ascending node
-    //     let n = Vec3::new(-h.y, h.x, 0.0).normalize();
-    //     let o = n.cross(Vec3::Z);
-    //     let sign = o.z.signum();
-    //     let cos_omega = n.dot(Vec3::X) / o.length();
-    //     let sin_omega = sign * o.y / o.length();
-    //     let omega = sin_omega.atan2(cos_omega);
-
-    //     // Compute the argument of periapsis
-    //     let cos_w = e.dot(n) / (e_mag * n.length());
-    //     let sin_w = e.dot(o) / (e_mag * o.length());
-    //     let w = sin_w.atan2(cos_w);
-
-    //     // Create a new Orbit object with the computed Keplerian elements
-    //     Orbit {
-    //         eccentricity: e_mag,
-    //         semi_major_axis: a,
-    //         inclination: i.asin(),
-    //         longitude_of_ascending_node: omega,
-    //         argument_of_periapsis: w,
-    //     }
-    // }
-
     pub fn state_vectors_to_orbit(sv: StateVectors, mass: f32, time: f32) -> Self {
         // Position magnitude
         let rv = sv.position;
@@ -98,7 +57,7 @@ impl KeplerianElements {
         let nv = Vec3::Y.cross(hv);
         let n = nv.length();
 
-        let Ω = 2.0 * PI - (nv.x / n).acos();
+        let Ω = PI - (nv.x / n).acos();
 
         // Eccentricity
         let μ = Self::standard_gravitational_parameter(mass);
@@ -106,13 +65,19 @@ impl KeplerianElements {
         let e = ev.length();
 
         // Argument of periapsis
-        let ω = 2.0 * PI - (nv.dot(ev) / n * e).acos();
+        // let ω = FRAC_PI_2 - (nv.dot(ev) / n * e).acos();
+        let ω = (nv.dot(ev) / n * e).acos();
+        // let ω = if ev.y >= 0.0 { ω } else { 2.0 * PI - ω };
+
+        let ω = FRAC_PI_2 - ω;
 
         // True anomaly
         let v = (rv / r).dot(ev / e).acos();
 
         // Semi-major axis
-        let a = (1.0 + e * v.cos()) / (r * (1.0 - e.powi(2)));
+        let ϵ = (v.powi(2) / 2.0) - (μ / r); // Specific orbital energy
+        let a = -μ / (2.0 * ϵ);
+        // let a = r * (1.0 + e * v.cos()) / (1.0 - e.powi(2));
 
         // Mean anomaly
         let t1 = -(1.0 - e.powi(2)).sqrt() * v.sin();
@@ -166,11 +131,12 @@ impl KeplerianElements {
 
     /// https://en.wikipedia.org/wiki/Mean_motion
     pub fn mean_motion(&self, mass: f32) -> f32 {
-        2.0 * PI / self.period(mass)
+        Self::mean_motion_static(self.semi_major_axis, mass)
     }
 
     pub fn mean_motion_static(a: f32, mass: f32) -> f32 {
-        2.0 * PI / Self::period_static(a, mass)
+        let μ = Self::standard_gravitational_parameter(mass);
+        (μ / a.powi(3)).sqrt()
     }
 
     /// https://en.wikipedia.org/wiki/Mean_anomaly
