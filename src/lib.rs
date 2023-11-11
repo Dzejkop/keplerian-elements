@@ -5,6 +5,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 use glam::{vec3, Mat3, Quat, Vec2, Vec3};
 
 pub mod constants;
+pub mod utils;
 
 use constants::G;
 const TWO_PI: f32 = 2.0 * PI;
@@ -118,16 +119,34 @@ impl KeplerianElements {
         let e = ev.length();
 
         // Argument of periapsis
+
+        if print_debug {
+            let debug_v = ev.dot(nv) / (e * n);
+            println!("ev.dot(nv) / (e * n) = {debug_v}");
+        }
+
         let mut ω = (ev.dot(nv) / (e * n)).acos();
         // let ω = (nv.dot(ev) / n * e).acos();
         // let ω = if ev.y >= 0.0 { ω } else { TWO_PI - ω };
+
+        if print_debug {
+            println!("ω before adjust = {ω}");
+        }
 
         if ev.z < 0.0 {
             ω = TWO_PI - ω;
         }
 
+        if print_debug {
+            println!("ω = {ω}");
+        }
+
         // True anomaly
-        let v = (rv / r).dot(ev / e).acos();
+        let mut v = (rv / r).dot(ev / e).acos();
+
+        if vr < 0.0 {
+            v = TWO_PI - v;
+        }
 
         // Semi-major axis
         // let ϵ = (v.powi(2) / 2.0) - (μ / r); // Specific orbital energy
