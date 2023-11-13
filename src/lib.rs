@@ -13,7 +13,7 @@ use math::newton_approx;
 const TWO_PI: f32 = 2.0 * PI;
 
 /// Data that defines a unique orbit in space
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct KeplerianElements {
     pub eccentricity: f32,
     pub semi_major_axis: f32,
@@ -30,7 +30,7 @@ pub struct Orbit {
     pub elements: KeplerianElements,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct StateVectors {
     pub position: Vec3,
     pub velocity: Vec3,
