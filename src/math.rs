@@ -31,7 +31,7 @@ pub fn newton_approx(
     }
 
     panic!(
-        "Failed to converge after {} iterations (x0 = {}, x = {}}",
+        "Failed to converge after {} iterations (x0 = {}, x = {})",
         MAX_STEPS, x0, x
     );
 }
