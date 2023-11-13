@@ -85,6 +85,8 @@ impl KeplerianElements {
 
         let e = ev.length();
 
+        let is_hyperbolic = e >= 1.0; // or parabolic
+
         // Argument of periapsis
         let ω = if e == 0.0 {
             // For a circular orbit the argument of periapsis is undefined
@@ -100,17 +102,30 @@ impl KeplerianElements {
         };
 
         // Semi-major axis
-        let a = if e >= 1.0 {
+        let a = if is_hyperbolic {
             (h.powi(2) / μ) / (e.powi(2) - 1.0)
         } else {
             (h.powi(2) / μ) / (1.0 - e.powi(2))
         };
 
+        // True anomaly
+        let mut v = (rv / r).dot(ev / e).acos();
+
+        if vr < 0.0 {
+            v = TWO_PI - v;
+        }
+
         // Mean anomaly
-        let mean_anomaly_at_epoch = if e >= 1.0 {
-            Self::hyperbolic_mean_motion(h, e, mass) * time
+        let M = if is_hyperbolic {
+            // https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-mean-anomaly-hyperbola
+            (e * (e.powi(2) - 1.0).sqrt() * v.sin()) / (1.0 + e * v.cos())
+                - (((e + 1.0).sqrt() + (e - 1.0).sqrt() * (v / 2.0).tan())
+                    / ((e + 1.0).sqrt() - (e - 1.0).sqrt() * (v / 2.0).tan()))
+                .ln()
         } else {
-            Self::mean_motion(h, e, mass) * time
+            // https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/elliptical-orbits.html#equation-eq-mean-anomaly-ellipse
+            2.0 * (((1.0 - e) / (1.0 + e)).sqrt() * (v / 2.0).tan()).atan()
+                - e * ((1.0 - e.powi(2)).sqrt() * v.sin() / (1.0 + e * v.cos()))
         };
 
         Self {
@@ -119,7 +134,7 @@ impl KeplerianElements {
             inclination: i,
             right_ascension_of_the_ascending_node: Ω,
             argument_of_periapsis: ω,
-            mean_anomaly_at_epoch,
+            mean_anomaly_at_epoch: M,
             epoch: time,
         }
     }
