@@ -1,10 +1,11 @@
+use std::f32::consts::PI;
+
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::egui::{DragValue, Ui};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
-use glam::vec3;
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
@@ -39,6 +40,7 @@ struct State {
     epoch_scale: f32,
 
     draw_orbits: bool,
+    orbit_subdivisions: u32,
     show_nodes: bool,
     show_peri_and_apo_apsis: bool,
     show_position_and_velocity: bool,
@@ -103,7 +105,7 @@ fn ui(
                                 ui,
                                 "Semi major axis",
                                 &mut orbit.semi_major_axis,
-                                f32::EPSILON,
+                                f32::MIN,
                                 f32::MAX,
                             );
                             value_slider(ui, "Eccentricity", &mut orbit.eccentricity);
@@ -118,7 +120,18 @@ fn ui(
                                 "Argument of periapsis",
                                 &mut orbit.argument_of_periapsis,
                             );
-                            value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch_zero);
+                            value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch);
+                            value_slider(ui, "Epoch", &mut orbit.epoch);
+
+                            ui.label("Readouts:");
+                            ui.label(format!(
+                                "True anomaly: {}",
+                                orbit.true_anomaly_at_epoch(
+                                    state.star_mass,
+                                    state.epoch,
+                                    state.tolerance
+                                )
+                            ));
                         }
                         OrbitalRepresentation::StateVectors(sv) => {
                             ui.label("Position");
@@ -168,6 +181,8 @@ fn ui(
                 if state.show_position_and_velocity {
                     value_slider(ui, "Velocity scale", &mut state.velocity_scale);
                 }
+
+                value_slider_u32(ui, "Orbit subdivisions", &mut state.orbit_subdivisions);
             }
 
             ui.checkbox(&mut state.draw_axis, "Draw axis");
@@ -209,6 +224,17 @@ fn value_slider_min_max(ui: &mut Ui, name: &str, value: &mut f32, min: f32, max:
     });
 }
 
+fn value_slider_u32(ui: &mut Ui, name: &str, value: &mut u32) {
+    ui.horizontal(|ui| {
+        ui.label(name);
+        ui.add(
+            DragValue::new(value)
+                .speed(1)
+                .clamp_range(u32::MIN..=u32::MAX),
+        );
+    });
+}
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -222,12 +248,13 @@ fn setup(
     });
 
     commands.insert_resource(State {
-        tolerance: 0.0001,
+        tolerance: 0.01,
         star_mass: 4.0,
         epoch: 0.0,
         epoch_scale: 1000.0,
         update_epoch: true,
         draw_orbits: true,
+        orbit_subdivisions: 100,
         show_nodes: true,
         show_peri_and_apo_apsis: true,
         show_position_and_velocity: true,
@@ -307,7 +334,8 @@ fn setup(
                 inclination: 0.001,
                 right_ascension_of_the_ascending_node: 0.0,
                 argument_of_periapsis: 0.0,
-                mean_anomaly_at_epoch_zero: 0.0,
+                mean_anomaly_at_epoch: 0.0,
+                epoch: 0.0,
             }),
             mass: 0.7,
         })
@@ -398,8 +426,6 @@ fn draw_orbits(
     let color = Color::RED;
 
     for planet in planets.iter() {
-        let mut t = 0.0;
-
         let orbit = match &planet.orbit {
             OrbitalRepresentation::Keplerian(orbit) => orbit.clone(),
             OrbitalRepresentation::StateVectors(sv) => {
@@ -407,31 +433,20 @@ fn draw_orbits(
             }
         };
 
-        let period = orbit.period(state.star_mass);
-        let step = period / 100.0;
-
-        let StateVectors {
-            position: first_position,
-            ..
-        } = orbit.state_vectors_at_epoch(state.star_mass, t, state.tolerance);
-
-        let first_position = zup2yup(first_position);
-
+        let first_position = zup2yup(orbit.position_at_true_anomaly(0.0));
         let mut prev_position = first_position.clone();
 
-        t += step;
+        let step = (2.0 * PI) / state.orbit_subdivisions as f32;
 
-        while t < period {
-            let StateVectors { position, .. } =
-                orbit.state_vectors_at_epoch(state.star_mass, t, state.tolerance);
+        for i in 0..state.orbit_subdivisions {
+            let t = i as f32 * step;
 
+            let position = orbit.position_at_true_anomaly(t);
             let position = zup2yup(position);
 
             lines.line_colored(prev_position, position, 0.0, color);
 
             prev_position = position;
-
-            t += step;
         }
 
         // Close the loop
