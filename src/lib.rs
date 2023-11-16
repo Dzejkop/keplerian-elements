@@ -4,6 +4,7 @@ use std::f32::consts::PI;
 
 use glam::{vec3, Mat3, Vec3};
 
+pub mod astro;
 pub mod constants;
 pub mod math;
 pub mod utils;

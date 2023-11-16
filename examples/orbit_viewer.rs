@@ -27,6 +27,7 @@ fn main() {
         .add_system(update_planets)
         .add_system(update_star)
         .add_system(draw_axis)
+        .add_system(draw_soi)
         .run();
 }
 
@@ -45,6 +46,8 @@ struct State {
     show_peri_and_apo_apsis: bool,
     show_position_and_velocity: bool,
     velocity_scale: f32,
+
+    draw_soi: bool,
 
     draw_axis: bool,
     axis_scale: f32,
@@ -72,35 +75,43 @@ fn ui(
                 ui.collapsing(name.as_str(), |ui| {
                     ui.label(name.to_string());
 
-                    // --- Elements ---
-                    let orbit = &mut planet.orbit;
-                    value_slider_min_max(
-                        ui,
-                        "Semi major axis",
-                        &mut orbit.semi_major_axis,
-                        f32::MIN,
-                        f32::MAX,
-                    );
-                    value_slider(ui, "Eccentricity", &mut orbit.eccentricity);
-                    value_slider(ui, "Inclination", &mut orbit.inclination);
-                    value_slider(
-                        ui,
-                        "Longitude of ascending node",
-                        &mut orbit.right_ascension_of_the_ascending_node,
-                    );
-                    value_slider(
-                        ui,
-                        "Argument of periapsis",
-                        &mut orbit.argument_of_periapsis,
-                    );
-                    value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch);
-                    value_slider(ui, "Epoch", &mut orbit.epoch);
+                    value_slider(ui, "Mass", &mut planet.mass);
 
-                    ui.label("Readouts:");
-                    ui.label(format!(
-                        "True anomaly: {}",
-                        orbit.true_anomaly_at_epoch(state.star_mass, state.epoch, state.tolerance)
-                    ));
+                    // --- Elements ---
+                    ui.collapsing("Orbital Elements", |ui| {
+                        let orbit = &mut planet.orbit;
+                        value_slider_min_max(
+                            ui,
+                            "Semi major axis",
+                            &mut orbit.semi_major_axis,
+                            f32::MIN,
+                            f32::MAX,
+                        );
+                        value_slider(ui, "Eccentricity", &mut orbit.eccentricity);
+                        value_slider(ui, "Inclination", &mut orbit.inclination);
+                        value_slider(
+                            ui,
+                            "Longitude of ascending node",
+                            &mut orbit.right_ascension_of_the_ascending_node,
+                        );
+                        value_slider(
+                            ui,
+                            "Argument of periapsis",
+                            &mut orbit.argument_of_periapsis,
+                        );
+                        value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch);
+                        value_slider(ui, "Epoch", &mut orbit.epoch);
+
+                        ui.label("Readouts:");
+                        ui.label(format!(
+                            "True anomaly: {}",
+                            orbit.true_anomaly_at_epoch(
+                                state.star_mass,
+                                state.epoch,
+                                state.tolerance
+                            )
+                        ));
+                    });
 
                     planet.state_vectors = planet.orbit.state_vectors_at_epoch(
                         state.star_mass,
@@ -109,26 +120,28 @@ fn ui(
                     );
 
                     // --- State Vectors ---
-                    let sv = &mut planet.state_vectors;
-                    ui.label("Position");
+                    ui.collapsing("State Vectors", |ui| {
+                        let sv = &mut planet.state_vectors;
+                        ui.label("Position");
 
-                    let mut p = zup2yup(sv.position);
+                        let mut p = zup2yup(sv.position);
 
-                    value_slider(ui, "X", &mut p.x);
-                    value_slider(ui, "Y", &mut p.y);
-                    value_slider(ui, "Z", &mut p.z);
+                        value_slider(ui, "X", &mut p.x);
+                        value_slider(ui, "Y", &mut p.y);
+                        value_slider(ui, "Z", &mut p.z);
 
-                    sv.position = yup2zup(p);
+                        sv.position = yup2zup(p);
 
-                    ui.label("Velocity");
+                        ui.label("Velocity");
 
-                    let mut v = zup2yup(sv.velocity * state.velocity_scale);
+                        let mut v = zup2yup(sv.velocity * state.velocity_scale);
 
-                    value_slider(ui, "Vx", &mut v.x);
-                    value_slider(ui, "Vy", &mut v.y);
-                    value_slider(ui, "Vz", &mut v.z);
+                        value_slider(ui, "Vx", &mut v.x);
+                        value_slider(ui, "Vy", &mut v.y);
+                        value_slider(ui, "Vz", &mut v.z);
 
-                    sv.velocity = yup2zup(v / state.velocity_scale);
+                        sv.velocity = yup2zup(v / state.velocity_scale);
+                    });
 
                     planet.orbit = KeplerianElements::state_vectors_to_orbit(
                         planet.state_vectors.clone(),
@@ -164,6 +177,8 @@ fn ui(
 
                 value_slider_u32(ui, "Orbit subdivisions", &mut state.orbit_subdivisions);
             }
+
+            ui.checkbox(&mut state.draw_soi, "Draw SOI");
 
             ui.checkbox(&mut state.draw_axis, "Draw axis");
             if state.draw_axis {
@@ -239,6 +254,7 @@ fn setup(
         show_peri_and_apo_apsis: true,
         show_position_and_velocity: true,
         velocity_scale: 10_000_000.00,
+        draw_soi: true,
         draw_axis: true,
         axis_scale: 1000.0,
     });
@@ -282,24 +298,26 @@ fn setup(
         .insert(NotShadowCaster)
         .insert(Star);
 
-    // commands
-    //     .spawn(PbrBundle {
-    //         mesh: sphere.clone(),
-    //         material: planet_material(Color::BEIGE),
-    //         ..Default::default()
-    //     })
-    //     .insert(Planet {
-    //         orbit: Orbit {
-    //             semi_major_axis: 7.0,
-    //             eccentricity: 0.12,
-    //             inclination: 0.12,
-    //             longitude_of_ascending_node: 0.0,
-    //             argument_of_periapsis: 0.0,
-    //             mean_anomaly_at_epoch_zero: 0.0,
-    //         },
-    //         mass: 0.3,
-    //     })
-    //     .insert(Name::new("Mercury"));
+    commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::BEIGE),
+            ..Default::default()
+        })
+        .insert(Planet {
+            orbit: KeplerianElements {
+                semi_major_axis: 7.0,
+                eccentricity: 0.12,
+                inclination: 0.12,
+                right_ascension_of_the_ascending_node: 0.0,
+                argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch: 0.0,
+                epoch: 0.0,
+            },
+            state_vectors: StateVectors::default(),
+            mass: 0.7,
+        })
+        .insert(Name::new("Mercury"));
 
     commands
         .spawn(PbrBundle {
@@ -322,24 +340,26 @@ fn setup(
         })
         .insert(Name::new("Earth"));
 
-    // commands
-    //     .spawn(PbrBundle {
-    //         mesh: sphere.clone(),
-    //         material: planet_material(Color::RED),
-    //         ..Default::default()
-    //     })
-    //     .insert(Planet {
-    //         orbit: Orbit {
-    //             semi_major_axis: 20.0,
-    //             eccentricity: 0.1,
-    //             inclination: 0.1,
-    //             longitude_of_ascending_node: 0.0,
-    //             argument_of_periapsis: 0.0,
-    //             mean_anomaly_at_epoch_zero: 0.0,
-    //         },
-    //         mass: 0.6,
-    //     })
-    //     .insert(Name::new("Mars"));
+    commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::RED),
+            ..Default::default()
+        })
+        .insert(Planet {
+            orbit: KeplerianElements {
+                semi_major_axis: 20.0,
+                eccentricity: 0.1,
+                inclination: 0.1,
+                right_ascension_of_the_ascending_node: 0.0,
+                argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch: 0.0,
+                epoch: 0.0,
+            },
+            state_vectors: StateVectors::default(),
+            mass: 0.6,
+        })
+        .insert(Name::new("Mars"));
 
     commands
         .spawn(Camera3dBundle::default())
@@ -452,6 +472,50 @@ fn draw_orbits(
             debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.apoapsis()), Color::WHITE);
 
             debug_arrows.draw_arrow(Vec3::ZERO, 10.0 * normal, Color::GREEN);
+        }
+    }
+}
+
+fn draw_soi(
+    mut lines: ResMut<DebugLines>,
+    planets: Query<&Planet>,
+    state: Res<State>,
+    camera: Query<&GlobalTransform, With<Camera>>,
+) {
+    if !state.draw_soi {
+        return;
+    }
+
+    let camera = camera.single();
+
+    let camera_position = camera.translation();
+
+    for planet in planets.iter() {
+        let orbit = &planet.orbit;
+
+        let soi = keplerian_elements::astro::soi(
+            planet.orbit.semi_major_axis,
+            planet.mass,
+            state.star_mass,
+        );
+
+        let pos = yup2zup(planet.state_vectors.position);
+
+        let to_camera = (camera_position - pos).normalize();
+        let planet_camera_radial = to_camera.cross(pos).normalize();
+
+        let mut prev_pos = pos + planet_camera_radial * soi;
+        for i in 0..=100 {
+            let t = i as f32 * 2.0 * PI / 100.0;
+
+            let rot_matrix = Mat3::from_axis_angle(to_camera, t);
+
+            let p = rot_matrix * planet_camera_radial;
+            let p = pos + p * soi;
+
+            lines.line_colored(prev_pos, p, 0.0, Color::WHITE);
+
+            prev_pos = p;
         }
     }
 }
