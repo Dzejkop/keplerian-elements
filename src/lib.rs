@@ -70,14 +70,17 @@ impl KeplerianElements {
 
         // N vector and magnitude - it's the vector
         // parallel to the node line
-        let nv = Vec3::Z.cross(hv);
-        let n = nv.length();
+        let nv = Vec3::Z.cross(hv).normalize();
 
         // We find the angle between the node line & the X axis
-        let mut Ω = PI - (nv.x / n).acos();
+        let mut Ω = PI - nv.x.acos();
 
         if nv.y < 0.0 {
             Ω = TWO_PI - Ω;
+        }
+
+        if i.abs() < f32::EPSILON {
+            Ω = 0.0;
         }
 
         // Eccentricity
@@ -93,7 +96,7 @@ impl KeplerianElements {
             // For a circular orbit the argument of periapsis is undefined
             0.0
         } else {
-            let mut ω = PI - (ev.dot(nv) / (e * n)).acos();
+            let mut ω = PI - (ev.dot(nv) / e).acos();
 
             if ev.z < 0.0 {
                 ω = TWO_PI - ω;
@@ -116,17 +119,28 @@ impl KeplerianElements {
             v = TWO_PI - v;
         }
 
-        // Mean anomaly
+        // Hyperbolic mean anomaly calculation
+        fn calculate_hyperbolic_mean_anomaly(e: f32, v: f32) -> f32 {
+            let term1 = (e * (e.powi(2) - 1.0).sqrt() * v.sin()) / (1.0 + e * v.cos());
+            let term2_numerator = (e + 1.0).sqrt() + (e - 1.0).sqrt() * (v / 2.0).tan();
+            let term2_denominator = (e + 1.0).sqrt() - (e - 1.0).sqrt() * (v / 2.0).tan();
+
+            term1 - (term2_numerator / term2_denominator).ln()
+        }
+
+        // Elliptical mean anomaly calculation
+        fn calculate_elliptical_mean_anomaly(e: f32, v: f32) -> f32 {
+            let term1 = 2.0 * (((1.0 - e) / (1.0 + e)).sqrt() * (v / 2.0).tan()).atan();
+            let term2 = e * ((1.0 - e.powi(2)).sqrt() * v.sin() / (1.0 + e * v.cos()));
+
+            term1 - term2
+        }
+
+        // Mean anomaly calculation
         let M = if is_hyperbolic {
-            // https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-mean-anomaly-hyperbola
-            (e * (e.powi(2) - 1.0).sqrt() * v.sin()) / (1.0 + e * v.cos())
-                - (((e + 1.0).sqrt() + (e - 1.0).sqrt() * (v / 2.0).tan())
-                    / ((e + 1.0).sqrt() - (e - 1.0).sqrt() * (v / 2.0).tan()))
-                .ln()
+            calculate_hyperbolic_mean_anomaly(e, v)
         } else {
-            // https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/elliptical-orbits.html#equation-eq-mean-anomaly-ellipse
-            2.0 * (((1.0 - e) / (1.0 + e)).sqrt() * (v / 2.0).tan()).atan()
-                - e * ((1.0 - e.powi(2)).sqrt() * v.sin() / (1.0 + e * v.cos()))
+            calculate_elliptical_mean_anomaly(e, v)
         };
 
         Self {
@@ -242,16 +256,14 @@ impl KeplerianElements {
         let M = self.hyperbolic_mean_anomaly(mass, epoch);
         let e = self.eccentricity;
 
-        let x = newton_approx(
+        newton_approx(
             // f(F) = e * sinh(F) - F - M
             |F| (e * F.sinh()) - F - M,
             // f'(F) = e * cosh(F) - 1
             |F| e * F.cosh() - 1.0,
             M,
             tolerance,
-        );
-
-        x
+        )
     }
 
     pub fn state_vectors_at_epoch(&self, mass: f32, epoch: f32, tolerance: f32) -> StateVectors {

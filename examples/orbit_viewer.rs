@@ -51,6 +51,9 @@ struct State {
 
     draw_axis: bool,
     axis_scale: f32,
+
+    distance_scaling: f32,
+    mass_radius_scaling: f32,
 }
 
 #[derive(Component)]
@@ -111,13 +114,13 @@ fn ui(
                                 state.tolerance
                             )
                         ));
-                    });
 
-                    planet.state_vectors = planet.orbit.state_vectors_at_epoch(
-                        state.star_mass,
-                        state.epoch,
-                        state.tolerance,
-                    );
+                        planet.state_vectors = planet.orbit.state_vectors_at_epoch(
+                            state.star_mass,
+                            state.epoch,
+                            state.tolerance,
+                        );
+                    });
 
                     // --- State Vectors ---
                     ui.collapsing("State Vectors", |ui| {
@@ -141,13 +144,14 @@ fn ui(
                         value_slider(ui, "Vz", &mut v.z);
 
                         sv.velocity = yup2zup(v / state.velocity_scale);
-                    });
 
-                    planet.orbit = KeplerianElements::state_vectors_to_orbit(
-                        planet.state_vectors.clone(),
-                        state.star_mass,
-                        state.epoch,
-                    );
+                        let sv = sv.clone();
+                        planet.orbit = KeplerianElements::state_vectors_to_orbit(
+                            sv,
+                            state.star_mass,
+                            state.epoch,
+                        );
+                    });
                 });
             }
         });
@@ -184,6 +188,16 @@ fn ui(
             if state.draw_axis {
                 value_slider(ui, "Axis scale", &mut state.axis_scale);
             }
+
+            value_slider_min_max_with_speed(
+                ui,
+                "Distance scaling",
+                &mut state.distance_scaling,
+                0.000001,
+                1.0,
+                0.0000001,
+            );
+            value_slider(ui, "Mass radius scaling", &mut state.mass_radius_scaling);
         });
 
         if let Ok(mut camera) = camera.get_single_mut() {
@@ -213,9 +227,20 @@ fn value_slider(ui: &mut Ui, name: &str, value: &mut f32) {
 }
 
 fn value_slider_min_max(ui: &mut Ui, name: &str, value: &mut f32, min: f32, max: f32) {
+    value_slider_min_max_with_speed(ui, name, value, min, max, 0.01);
+}
+
+fn value_slider_min_max_with_speed(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut f32,
+    min: f32,
+    max: f32,
+    speed: f32,
+) {
     ui.horizontal(|ui| {
         ui.label(name);
-        ui.add(DragValue::new(value).speed(0.01).clamp_range(min..=max));
+        ui.add(DragValue::new(value).speed(speed).clamp_range(min..=max));
     });
 }
 
@@ -257,6 +282,8 @@ fn setup(
         draw_soi: true,
         draw_axis: true,
         axis_scale: 1000.0,
+        distance_scaling: 1e-6,
+        mass_radius_scaling: 1.0,
     });
 
     let sphere = meshes.add(Mesh::from(shape::Icosphere {
@@ -298,26 +325,27 @@ fn setup(
         .insert(NotShadowCaster)
         .insert(Star);
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::BEIGE),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                semi_major_axis: 7.0,
-                eccentricity: 0.12,
-                inclination: 0.12,
-                right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 0.0,
-                mean_anomaly_at_epoch: 0.0,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 0.7,
-        })
-        .insert(Name::new("Mercury"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::BEIGE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         // Mercury
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.20563593,
+    //             semi_major_axis: 0.38709927 * 1.496e+8, // AU to km conversion
+    //             inclination: 7.00497902,
+    //             right_ascension_of_the_ascending_node: 48.33076593,
+    //             argument_of_periapsis: 77.45779628,
+    //             mean_anomaly_at_epoch: 252.25032350,
+    //             epoch: 2023.0, // Example epoch year
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 0.330, // x 10^24 kg
+    //     })
+    //     .insert(Name::new("Mercury"));
 
     commands
         .spawn(PbrBundle {
@@ -326,40 +354,42 @@ fn setup(
             ..Default::default()
         })
         .insert(Planet {
+            // Earth
             orbit: KeplerianElements {
-                semi_major_axis: 10.0,
-                eccentricity: 0.01,
-                inclination: 0.001,
+                eccentricity: 0.01673,
+                semi_major_axis: 1.0000 * 1.496e+8,
+                inclination: 0.01,
                 right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 0.0,
+                argument_of_periapsis: 1.7964674,
                 mean_anomaly_at_epoch: 0.0,
-                epoch: 0.0,
+                epoch: 2023.0,
             },
             state_vectors: StateVectors::default(),
-            mass: 0.7,
+            mass: 5.97,
         })
         .insert(Name::new("Earth"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::RED),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                semi_major_axis: 20.0,
-                eccentricity: 0.1,
-                inclination: 0.1,
-                right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 0.0,
-                mean_anomaly_at_epoch: 0.0,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 0.6,
-        })
-        .insert(Name::new("Mars"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::RED),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         // Mars
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.09339410,
+    //             semi_major_axis: 1.52371034 * 1.496e+8,
+    //             inclination: 1.84969142,
+    //             right_ascension_of_the_ascending_node: 49.55953891,
+    //             argument_of_periapsis: -23.94362959,
+    //             mean_anomaly_at_epoch: -4.55343205,
+    //             epoch: 2023.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 0.642,
+    //     })
+    //     .insert(Name::new("Mars"));
 
     commands
         .spawn(Camera3dBundle::default())
@@ -389,12 +419,17 @@ fn update_epoch(time: Res<Time>, mut state: ResMut<State>) {
     }
 }
 
-fn update_planets(mut query: Query<(&mut Transform, &Planet)>, state: Res<State>) {
-    for (mut transform, planet) in query.iter_mut() {
+fn update_planets(mut query: Query<(&mut Transform, &mut Planet)>, state: Res<State>) {
+    for (mut transform, mut planet) in query.iter_mut() {
+        planet.state_vectors =
+            planet
+                .orbit
+                .state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
+
         let position = zup2yup(planet.state_vectors.position);
 
-        transform.translation = position;
-        transform.scale = Vec3::ONE * planet.mass;
+        transform.translation = position * state.distance_scaling;
+        transform.scale = Vec3::ONE * planet.mass * state.mass_radius_scaling;
     }
 }
 
@@ -422,7 +457,7 @@ fn draw_orbits(
     for planet in planets.iter() {
         let orbit = &planet.orbit;
 
-        let first_position = zup2yup(orbit.position_at_true_anomaly(0.0));
+        let first_position = zup2yup(orbit.position_at_true_anomaly(0.0)) * state.distance_scaling;
         let mut prev_position = first_position.clone();
 
         let step = (2.0 * PI) / state.orbit_subdivisions as f32;
@@ -431,7 +466,7 @@ fn draw_orbits(
             let t = i as f32 * step;
 
             let position = orbit.position_at_true_anomaly(t);
-            let position = zup2yup(position);
+            let position = zup2yup(position) * state.distance_scaling;
 
             lines.line_colored(prev_position, position, 0.0, color);
 
@@ -450,7 +485,7 @@ fn draw_orbits(
             let position = zup2yup(position);
             let velocity = zup2yup(velocity);
 
-            debug_arrows.draw_arrow(Vec3::ZERO, position, color);
+            debug_arrows.draw_arrow(Vec3::ZERO, position * state.distance_scaling, color);
             debug_arrows.draw_arrow(
                 position,
                 position + (state.velocity_scale * velocity),
@@ -466,10 +501,22 @@ fn draw_orbits(
                 zup2yup(orbit.ascending_node()),
                 Color::YELLOW_GREEN,
             );
-            debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.descending_node()), Color::YELLOW);
+            debug_arrows.draw_arrow(
+                Vec3::ZERO,
+                zup2yup(orbit.descending_node()) * state.distance_scaling,
+                Color::YELLOW,
+            );
 
-            debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.periapsis()), Color::WHITE);
-            debug_arrows.draw_arrow(Vec3::ZERO, zup2yup(orbit.apoapsis()), Color::WHITE);
+            debug_arrows.draw_arrow(
+                Vec3::ZERO,
+                zup2yup(orbit.periapsis()) * state.distance_scaling,
+                Color::WHITE,
+            );
+            debug_arrows.draw_arrow(
+                Vec3::ZERO,
+                zup2yup(orbit.apoapsis()) * state.distance_scaling,
+                Color::WHITE,
+            );
 
             debug_arrows.draw_arrow(Vec3::ZERO, 10.0 * normal, Color::GREEN);
         }
@@ -491,15 +538,13 @@ fn draw_soi(
     let camera_position = camera.translation();
 
     for planet in planets.iter() {
-        let orbit = &planet.orbit;
-
         let soi = keplerian_elements::astro::soi(
             planet.orbit.semi_major_axis,
             planet.mass,
             state.star_mass,
-        );
+        ) * state.distance_scaling;
 
-        let pos = yup2zup(planet.state_vectors.position);
+        let pos = yup2zup(planet.state_vectors.position) * state.distance_scaling;
 
         let to_camera = (camera_position - pos).normalize();
         let planet_camera_radial = to_camera.cross(pos).normalize();
