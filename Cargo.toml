@@ -16,3 +16,8 @@ bevy = "0.9"
 bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
 smooth-bevy-cameras = "0.7"
 bevy_egui = "0.19"
+
+[features]
+default = [ "f32" ]
+f32 = []
+f64 = []

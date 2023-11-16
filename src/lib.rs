@@ -1,28 +1,36 @@
 #![allow(non_snake_case)]
 
-use std::f32::consts::PI;
+#[cfg(feature = "f64")]
+pub use glam::{dvec3 as vec3, DMat3 as Mat3, DVec3 as Vec3};
+#[cfg(feature = "f32")]
+pub use glam::{vec3, Mat3, Vec3};
 
-use glam::{vec3, Mat3, Vec3};
+#[cfg(feature = "f32")]
+pub type Num = f32;
+
+#[cfg(feature = "f64")]
+pub type Num = f64;
 
 pub mod astro;
 pub mod constants;
 pub mod math;
 pub mod utils;
 
-use constants::G;
+use constants::{G, PI};
 use math::newton_approx;
-const TWO_PI: f32 = 2.0 * PI;
+
+const TWO_PI: Num = 2.0 * PI;
 
 /// Data that defines a unique orbit in space
 #[derive(Debug, Clone, Copy)]
 pub struct KeplerianElements {
-    pub eccentricity: f32,
-    pub semi_major_axis: f32,
-    pub inclination: f32,
-    pub right_ascension_of_the_ascending_node: f32,
-    pub argument_of_periapsis: f32,
-    pub mean_anomaly_at_epoch: f32,
-    pub epoch: f32,
+    pub eccentricity: Num,
+    pub semi_major_axis: Num,
+    pub inclination: Num,
+    pub right_ascension_of_the_ascending_node: Num,
+    pub argument_of_periapsis: Num,
+    pub mean_anomaly_at_epoch: Num,
+    pub epoch: Num,
 }
 
 /// Data that defines an orbit and position in space
@@ -44,7 +52,7 @@ impl StateVectors {
 }
 
 impl KeplerianElements {
-    pub fn state_vectors_to_orbit(sv: StateVectors, mass: f32, time: f32) -> Self {
+    pub fn state_vectors_to_orbit(sv: StateVectors, mass: Num, time: Num) -> Self {
         // Position magnitude
         let rv = sv.position;
         let r = rv.length();
@@ -79,7 +87,7 @@ impl KeplerianElements {
             Ω = TWO_PI - Ω;
         }
 
-        if i.abs() < f32::EPSILON {
+        if i.abs() < Num::EPSILON {
             Ω = 0.0;
         }
 
@@ -120,7 +128,7 @@ impl KeplerianElements {
         }
 
         // Hyperbolic mean anomaly calculation
-        fn calculate_hyperbolic_mean_anomaly(e: f32, v: f32) -> f32 {
+        fn calculate_hyperbolic_mean_anomaly(e: Num, v: Num) -> Num {
             let term1 = (e * (e.powi(2) - 1.0).sqrt() * v.sin()) / (1.0 + e * v.cos());
             let term2_numerator = (e + 1.0).sqrt() + (e - 1.0).sqrt() * (v / 2.0).tan();
             let term2_denominator = (e + 1.0).sqrt() - (e - 1.0).sqrt() * (v / 2.0).tan();
@@ -129,7 +137,7 @@ impl KeplerianElements {
         }
 
         // Elliptical mean anomaly calculation
-        fn calculate_elliptical_mean_anomaly(e: f32, v: f32) -> f32 {
+        fn calculate_elliptical_mean_anomaly(e: Num, v: Num) -> Num {
             let term1 = 2.0 * (((1.0 - e) / (1.0 + e)).sqrt() * (v / 2.0).tan()).atan();
             let term2 = e * ((1.0 - e.powi(2)).sqrt() * v.sin() / (1.0 + e * v.cos()));
 
@@ -175,21 +183,21 @@ impl KeplerianElements {
     }
 
     /// https://en.wikipedia.org/wiki/Standard_gravitational_parameter
-    pub fn standard_gravitational_parameter(mass: f32) -> f32 {
+    pub fn standard_gravitational_parameter(mass: Num) -> Num {
         G * mass
     }
 
     /// https://en.wikipedia.org/wiki/Orbital_period
-    pub fn period(&self, mass: f32) -> f32 {
+    pub fn period(&self, mass: Num) -> Num {
         Self::period_static(self.semi_major_axis, mass)
     }
 
-    pub fn period_static(a: f32, mass: f32) -> f32 {
+    pub fn period_static(a: Num, mass: Num) -> Num {
         TWO_PI * (a.powi(3) / Self::standard_gravitational_parameter(mass)).sqrt()
     }
 
     /// https://en.wikipedia.org/wiki/Mean_anomaly
-    pub fn mean_anomaly(&self, mass: f32, epoch: f32) -> f32 {
+    pub fn mean_anomaly(&self, mass: Num, epoch: Num) -> Num {
         let h = self.specific_angular_momentum(mass);
         let e = self.eccentricity;
 
@@ -199,7 +207,7 @@ impl KeplerianElements {
     }
 
     /// https://en.wikipedia.org/wiki/Mean_anomaly
-    pub fn mean_motion(h: f32, e: f32, mass: f32) -> f32 {
+    pub fn mean_motion(h: Num, e: Num, mass: Num) -> Num {
         let μ = Self::standard_gravitational_parameter(mass);
 
         (μ.powi(2) / h.powi(3)) * (1.0 - e.powi(2)).powi(3).sqrt()
@@ -207,7 +215,7 @@ impl KeplerianElements {
 
     /// Hyperbolic mean anomaly
     /// SRC: https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-hyperbolic-mean-anomaly
-    pub fn hyperbolic_mean_anomaly(&self, mass: f32, epoch: f32) -> f32 {
+    pub fn hyperbolic_mean_anomaly(&self, mass: Num, epoch: Num) -> Num {
         let h = self.specific_angular_momentum(mass);
         let e = self.eccentricity;
 
@@ -218,7 +226,7 @@ impl KeplerianElements {
 
     /// Hyperbolic mean anomaly
     /// SRC: https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-hyperbolic-mean-anomaly
-    pub fn hyperbolic_mean_motion(h: f32, e: f32, mass: f32) -> f32 {
+    pub fn hyperbolic_mean_motion(h: Num, e: Num, mass: Num) -> Num {
         let μ = Self::standard_gravitational_parameter(mass);
 
         (μ.powi(2) / h.powi(3)) * (e.powi(2) - 1.0).powi(3).sqrt()
@@ -231,7 +239,7 @@ impl KeplerianElements {
     /// e is the eccentricity
     ///
     /// https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/elliptical-orbits.html#equation-eq-keplers-equation-ellipse
-    pub fn estimate_eccentric_anomaly(&self, mass: f32, epoch: f32, tolerance: f32) -> f32 {
+    pub fn estimate_eccentric_anomaly(&self, mass: Num, epoch: Num, tolerance: Num) -> Num {
         let M = self.mean_anomaly(mass, epoch);
         let e = self.eccentricity;
 
@@ -252,7 +260,7 @@ impl KeplerianElements {
     /// e is the eccentricity
     ///
     /// https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-hyperbolic-keplers-equation
-    pub fn estimate_hyperbolic_anomaly(&self, mass: f32, epoch: f32, tolerance: f32) -> f32 {
+    pub fn estimate_hyperbolic_anomaly(&self, mass: Num, epoch: Num, tolerance: Num) -> Num {
         let M = self.hyperbolic_mean_anomaly(mass, epoch);
         let e = self.eccentricity;
 
@@ -266,7 +274,7 @@ impl KeplerianElements {
         )
     }
 
-    pub fn state_vectors_at_epoch(&self, mass: f32, epoch: f32, tolerance: f32) -> StateVectors {
+    pub fn state_vectors_at_epoch(&self, mass: Num, epoch: Num, tolerance: Num) -> StateVectors {
         // Lowercase nu
         let v = self.true_anomaly_at_epoch(mass, epoch, tolerance);
 
@@ -276,7 +284,7 @@ impl KeplerianElements {
         }
     }
 
-    pub fn position_at_true_anomaly(&self, v: f32) -> Vec3 {
+    pub fn position_at_true_anomaly(&self, v: Num) -> Vec3 {
         let a = self.semi_major_axis;
         let e = self.eccentricity;
 
@@ -302,7 +310,7 @@ impl KeplerianElements {
         self.perifocal_to_equatorial(position)
     }
 
-    pub fn velocity_at_true_anomaly(&self, mass: f32, v: f32) -> Vec3 {
+    pub fn velocity_at_true_anomaly(&self, mass: Num, v: Num) -> Vec3 {
         let e = self.eccentricity;
         let h = self.specific_angular_momentum(mass);
         let μ = Self::standard_gravitational_parameter(mass);
@@ -331,7 +339,7 @@ impl KeplerianElements {
         m.mul_vec3(perifocal)
     }
 
-    pub fn specific_angular_momentum(&self, mass: f32) -> f32 {
+    pub fn specific_angular_momentum(&self, mass: Num) -> Num {
         let μ = Self::standard_gravitational_parameter(mass);
         let a = self.semi_major_axis;
         let e = self.eccentricity;
@@ -346,7 +354,7 @@ impl KeplerianElements {
     }
 
     /// Calculates true anomaly
-    pub fn true_anomaly_at_epoch(&self, mass: f32, epoch: f32, tolerance: f32) -> f32 {
+    pub fn true_anomaly_at_epoch(&self, mass: Num, epoch: Num, tolerance: Num) -> Num {
         let e = self.eccentricity;
 
         if self.is_hyperbolic() {

@@ -1,3 +1,5 @@
+use crate::Num;
+
 const MAX_STEPS: usize = 100_000;
 
 /// Approximates the root of a function using the Newton-Raphson method.
@@ -11,11 +13,11 @@ const MAX_STEPS: usize = 100_000;
 /// # Returns
 /// The approximate root of the function
 pub fn newton_approx(
-    f: impl Fn(f32) -> f32,
-    f_prime: impl Fn(f32) -> f32,
-    x0: f32,
-    epsilon: f32,
-) -> f32 {
+    f: impl Fn(Num) -> Num,
+    f_prime: impl Fn(Num) -> Num,
+    x0: Num,
+    epsilon: Num,
+) -> Num {
     let mut x = x0;
 
     for _ in 0..MAX_STEPS {
