@@ -710,11 +710,10 @@ fn draw_soi(
     let camera_position = camera.translation();
 
     for planet in planets.iter() {
-        let soi = keplerian_elements::astro::soi(
-            planet.orbit.semi_major_axis,
-            planet.mass,
-            state.star_mass,
-        ) * state.distance_scaling;
+        let r = planet.state_vectors.position.length();
+
+        let soi = keplerian_elements::astro::soi(r, planet.mass, state.star_mass)
+            * state.distance_scaling;
 
         let pos = yup2zup(planet.state_vectors.position) * state.distance_scaling;
 
