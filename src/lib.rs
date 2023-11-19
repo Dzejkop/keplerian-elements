@@ -292,15 +292,15 @@ impl KeplerianElements {
         let (p, q) = if self.is_hyperbolic() {
             let r = (a * (e.powi(2) - 1.0)) / (1.0 + e * v.cos());
 
-            let p = r * v.cos();
-            let q = r * v.sin();
+            let p = r * v.sin();
+            let q = r * v.cos();
 
             (p, q)
         } else {
             let r = (a * (1.0 - e.powi(2))) / (1.0 + e * v.cos());
 
-            let p = r * v.cos();
-            let q = r * v.sin();
+            let p = r * v.sin();
+            let q = r * v.cos();
 
             (p, q)
         };
