@@ -319,6 +319,7 @@ fn setup(
 
     commands.insert_resource(State {
         tolerance: 0.01,
+        // Sun Mass
         star_mass: 1.989e7,
         epoch: 0.0,
         epoch_scale: 1000.0,
@@ -346,15 +347,6 @@ fn setup(
         ..Default::default()
     });
 
-    let mut planet_material = |color: Color| {
-        materials.add(StandardMaterial {
-            base_color: color,
-            emissive: color,
-            perceptual_roughness: 1.0,
-            ..Default::default()
-        })
-    };
-
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 100000.0,
@@ -375,6 +367,44 @@ fn setup(
         })
         .insert(NotShadowCaster)
         .insert(Star);
+
+    spawn_solar_system(&mut commands, sphere, materials.as_mut());
+
+    commands
+        .spawn(Camera3dBundle::default())
+        .insert(BloomSettings {
+            intensity: 0.9,
+            threshold: 0.7,
+            ..default()
+        })
+        .insert(OrbitCameraBundle::new(
+            {
+                let mut controller = OrbitCameraController::default();
+
+                controller.mouse_rotate_sensitivity = Vec2::ONE * 1.0;
+                controller.mouse_translate_sensitivity = Vec2::ONE * 10.0;
+
+                controller
+            },
+            Vec3::new(-2.0, 5.0, 5.0),
+            Vec3::new(0., 0., 0.),
+            Vec3::Y,
+        ));
+}
+
+fn spawn_solar_system(
+    commands: &mut Commands,
+    sphere: Handle<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+) {
+    let mut planet_material = |color: Color| {
+        materials.add(StandardMaterial {
+            base_color: color,
+            emissive: color,
+            perceptual_roughness: 1.0,
+            ..Default::default()
+        })
+    };
 
     commands
         .spawn(PbrBundle {
@@ -543,27 +573,6 @@ fn setup(
             mass: 1.024e3,
         })
         .insert(Name::new("Neptune"));
-
-    commands
-        .spawn(Camera3dBundle::default())
-        .insert(BloomSettings {
-            intensity: 0.9,
-            threshold: 0.7,
-            ..default()
-        })
-        .insert(OrbitCameraBundle::new(
-            {
-                let mut controller = OrbitCameraController::default();
-
-                controller.mouse_rotate_sensitivity = Vec2::ONE * 1.0;
-                controller.mouse_translate_sensitivity = Vec2::ONE * 10.0;
-
-                controller
-            },
-            Vec3::new(-2.0, 5.0, 5.0),
-            Vec3::new(0., 0., 0.),
-            Vec3::Y,
-        ));
 }
 
 fn update_epoch(time: Res<Time>, mut state: ResMut<State>) {
@@ -715,7 +724,7 @@ fn draw_soi(
         let soi = keplerian_elements::astro::soi(r, planet.mass, state.star_mass)
             * state.distance_scaling;
 
-        let pos = yup2zup(planet.state_vectors.position) * state.distance_scaling;
+        let pos = zup2yup(planet.state_vectors.position) * state.distance_scaling;
 
         let to_camera = (camera_position - pos).normalize();
         let planet_camera_radial = to_camera.cross(pos).normalize();
