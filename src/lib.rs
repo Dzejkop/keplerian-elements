@@ -293,8 +293,8 @@ impl KeplerianElements {
         let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
 
         // Perifocal coordinates
-        let p = r * v.sin();
-        let q = r * v.cos();
+        let p = r * v.cos();
+        let q = r * v.sin();
 
         let position = vec3(p, q, 0.0);
 
@@ -304,17 +304,12 @@ impl KeplerianElements {
     pub fn velocity_at_true_anomaly(&self, mass: Num, v: Num) -> Vec3 {
         let e = self.eccentricity;
         let h = self.specific_angular_momentum(mass);
-        let μ = Self::standard_gravitational_parameter(mass);
 
-        let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
+        let f = 1.0 / h.powi(2);
+        let vp = -f * v.sin();
+        let vq = f * (e + v.cos());
 
-        let vmag = r / (1.0 + e * v.cos());
-
-        let vp = (v.cos() + e) * vmag;
-        let vq = -v.sin() * vmag;
-        let velocity = vec3(vp, vq, 0.0);
-
-        self.perifocal_to_equatorial(velocity)
+        self.perifocal_to_equatorial(vec3(vp, vq, 0.0))
     }
 
     #[inline(always)]
