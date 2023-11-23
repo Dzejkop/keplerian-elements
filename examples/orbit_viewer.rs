@@ -47,7 +47,6 @@ struct State {
     show_nodes: bool,
     show_peri_and_apo_apsis: bool,
     show_position_and_velocity: bool,
-    velocity_scale: f32,
 
     draw_soi: bool,
 
@@ -114,15 +113,30 @@ fn ui(
                         value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch);
                         value_slider(ui, "Epoch", &mut orbit.epoch);
 
+                        let v = orbit.true_anomaly_at_epoch(
+                            state.star_mass,
+                            state.epoch,
+                            state.tolerance,
+                        );
                         ui.label("Readouts:");
-                        ui.label(format!(
-                            "True anomaly: {}",
-                            orbit.true_anomaly_at_epoch(
-                                state.star_mass,
-                                state.epoch,
-                                state.tolerance
-                            )
-                        ));
+                        ui.label(format!("True anomaly: {v}",));
+
+                        let e = orbit.eccentricity;
+                        let h = orbit.specific_angular_momentum(state.star_mass);
+                        let μ =
+                            KeplerianElements::standard_gravitational_parameter(state.star_mass);
+
+                        let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
+                        ui.label(format!("r: {r}"));
+
+                        let vmag = r / (1.0 + e * v.cos());
+                        ui.label(format!("vmag: {vmag}",));
+
+                        let vp = (v.cos() + e) * vmag;
+                        let vq = -v.sin() * vmag;
+
+                        ui.label(format!("vp: {vp}",));
+                        ui.label(format!("vq: {vq}",));
 
                         planet.state_vectors = planet.orbit.state_vectors_at_epoch(
                             state.star_mass,
@@ -146,20 +160,20 @@ fn ui(
 
                         ui.label("Velocity");
 
-                        let mut v = zup2yup(sv.velocity * state.velocity_scale);
+                        // let mut v = zup2yup(sv.velocity * state.velocity_scale);
 
-                        value_slider(ui, "Vx", &mut v.x);
-                        value_slider(ui, "Vy", &mut v.y);
-                        value_slider(ui, "Vz", &mut v.z);
+                        // value_slider(ui, "Vx", &mut v.x);
+                        // value_slider(ui, "Vy", &mut v.y);
+                        // value_slider(ui, "Vz", &mut v.z);
 
-                        sv.velocity = yup2zup(v / state.velocity_scale);
+                        // sv.velocity = yup2zup(v / state.velocity_scale);
 
-                        let sv = sv.clone();
-                        planet.orbit = KeplerianElements::state_vectors_to_orbit(
-                            sv,
-                            state.star_mass,
-                            state.epoch,
-                        );
+                        // let sv = sv.clone();
+                        // planet.orbit = KeplerianElements::state_vectors_to_orbit(
+                        //     sv,
+                        //     state.star_mass,
+                        //     state.epoch,
+                        // );
                     });
                 });
             }
@@ -184,9 +198,6 @@ fn ui(
                     &mut state.show_position_and_velocity,
                     "Show position & velocity",
                 );
-                if state.show_position_and_velocity {
-                    value_slider(ui, "Velocity scale", &mut state.velocity_scale);
-                }
 
                 value_slider_u32(ui, "Orbit subdivisions", &mut state.orbit_subdivisions);
             }
@@ -329,7 +340,6 @@ fn setup(
         show_nodes: false,
         show_peri_and_apo_apsis: false,
         show_position_and_velocity: false,
-        velocity_scale: 10_000_000.00,
         draw_soi: true,
         draw_axis: true,
         axis_scale: 1000.0,
@@ -427,152 +437,152 @@ fn spawn_solar_system(
         })
         .insert(Name::new("Mercury"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::ORANGE),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                semi_major_axis: 0.7233 * AU,
-                eccentricity: 0.00676,
-                inclination: 0.0593,
-                right_ascension_of_the_ascending_node: 1.34,
-                argument_of_periapsis: 2.30,
-                mean_anomaly_at_epoch: 3.17,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 4.867e1,
-        })
-        .insert(Name::new("Venus"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::ORANGE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             semi_major_axis: 0.7233 * AU,
+    //             eccentricity: 0.00676,
+    //             inclination: 0.0593,
+    //             right_ascension_of_the_ascending_node: 1.34,
+    //             argument_of_periapsis: 2.30,
+    //             mean_anomaly_at_epoch: 3.17,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 4.867e1,
+    //     })
+    //     .insert(Name::new("Venus"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::BLUE),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                eccentricity: 0.01673,
-                semi_major_axis: 1.0000 * AU,
-                inclination: 0.01,
-                right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 1.7964674,
-                mean_anomaly_at_epoch: 0.0,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 5.972e1,
-        })
-        .insert(Name::new("Earth"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::BLUE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.01673,
+    //             semi_major_axis: 1.0000 * AU,
+    //             inclination: 0.01,
+    //             right_ascension_of_the_ascending_node: 0.0,
+    //             argument_of_periapsis: 1.7964674,
+    //             mean_anomaly_at_epoch: 0.0,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 5.972e1,
+    //     })
+    //     .insert(Name::new("Earth"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::RED),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                eccentricity: 0.09339410,
-                semi_major_axis: 1.52371034 * AU,
-                inclination: 0.03232349774693498376462675303241,
-                right_ascension_of_the_ascending_node: 0.86760317116638123268876668101569,
-                argument_of_periapsis: 5.8657025501025428421251399347365,
-                mean_anomaly_at_epoch: 6.2034237603634456152598740984391,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 0.642,
-        })
-        .insert(Name::new("Mars"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::RED),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.09339410,
+    //             semi_major_axis: 1.52371034 * AU,
+    //             inclination: 0.03232349774693498376462675303241,
+    //             right_ascension_of_the_ascending_node: 0.86760317116638123268876668101569,
+    //             argument_of_periapsis: 5.8657025501025428421251399347365,
+    //             mean_anomaly_at_epoch: 6.2034237603634456152598740984391,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 0.642,
+    //     })
+    //     .insert(Name::new("Mars"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::GREEN),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                eccentricity: 0.04854,
-                semi_major_axis: 5.2025 * AU,
-                inclination: 0.02267182698340634120423874308267,
-                right_ascension_of_the_ascending_node: 1.7503907068251131326967694717172,
-                argument_of_periapsis: 0.24905848425959083062701067266333,
-                mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 1.898e4,
-        })
-        .insert(Name::new("Jupiter"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::GREEN),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.04854,
+    //             semi_major_axis: 5.2025 * AU,
+    //             inclination: 0.02267182698340634120423874308267,
+    //             right_ascension_of_the_ascending_node: 1.7503907068251131326967694717172,
+    //             argument_of_periapsis: 0.24905848425959083062701067266333,
+    //             mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 1.898e4,
+    //     })
+    //     .insert(Name::new("Jupiter"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::YELLOW_GREEN),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                eccentricity: 0.05551,
-                semi_major_axis: 9.5415 * AU,
-                inclination: 0.04352851154473857964847684776611,
-                right_ascension_of_the_ascending_node: 1.9833921619663561312160821893105,
-                argument_of_periapsis: 1.6207127434019344451313392476185,
-                mean_anomaly_at_epoch: 0.8740608893987602521233843368591,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 5.683e3,
-        })
-        .insert(Name::new("Saturn"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::YELLOW_GREEN),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.05551,
+    //             semi_major_axis: 9.5415 * AU,
+    //             inclination: 0.04352851154473857964847684776611,
+    //             right_ascension_of_the_ascending_node: 1.9833921619663561312160821893105,
+    //             argument_of_periapsis: 1.6207127434019344451313392476185,
+    //             mean_anomaly_at_epoch: 0.8740608893987602521233843368591,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 5.683e3,
+    //     })
+    //     .insert(Name::new("Saturn"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::ALICE_BLUE),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                eccentricity: 0.04686,
-                semi_major_axis: 19.188 * AU,
-                inclination: 0.01349139511791616762962012964042,
-                right_ascension_of_the_ascending_node: 1.2908455147750061550927616923742,
-                argument_of_periapsis: 3.0094712292138224894895199921049,
-                mean_anomaly_at_epoch: 5.4838245097661835306942363945912,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 8.681e2,
-        })
-        .insert(Name::new("Uranus"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::ALICE_BLUE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.04686,
+    //             semi_major_axis: 19.188 * AU,
+    //             inclination: 0.01349139511791616762962012964042,
+    //             right_ascension_of_the_ascending_node: 1.2908455147750061550927616923742,
+    //             argument_of_periapsis: 3.0094712292138224894895199921049,
+    //             mean_anomaly_at_epoch: 5.4838245097661835306942363945912,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 8.681e2,
+    //     })
+    //     .insert(Name::new("Uranus"));
 
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::MIDNIGHT_BLUE),
-            ..Default::default()
-        })
-        .insert(Planet {
-            orbit: KeplerianElements {
-                eccentricity: 0.00895,
-                semi_major_axis: 30.070 * AU,
-                inclination: 0.03089232776029963351154932660225,
-                right_ascension_of_the_ascending_node: 2.3001694212033269494277320637911,
-                argument_of_periapsis: 0.81471969483095304650797885073048,
-                mean_anomaly_at_epoch: 5.3096406504171494389172520558961,
-                epoch: 0.0,
-            },
-            state_vectors: StateVectors::default(),
-            mass: 1.024e3,
-        })
-        .insert(Name::new("Neptune"));
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::MIDNIGHT_BLUE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             eccentricity: 0.00895,
+    //             semi_major_axis: 30.070 * AU,
+    //             inclination: 0.03089232776029963351154932660225,
+    //             right_ascension_of_the_ascending_node: 2.3001694212033269494277320637911,
+    //             argument_of_periapsis: 0.81471969483095304650797885073048,
+    //             mean_anomaly_at_epoch: 5.3096406504171494389172520558961,
+    //             epoch: 0.0,
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 1.024e3,
+    //     })
+    //     .insert(Name::new("Neptune"));
 }
 
 fn update_epoch(time: Res<Time>, mut state: ResMut<State>) {
@@ -640,7 +650,8 @@ fn draw_orbits(
     for planet in planets.iter() {
         let orbit = &planet.orbit;
 
-        let first_position = zup2yup(orbit.position_at_true_anomaly(0.0)) * state.distance_scaling;
+        let first_position =
+            zup2yup(orbit.position_at_true_anomaly(state.star_mass, 0.0)) * state.distance_scaling;
         let mut prev_position = first_position.clone();
 
         let step = (2.0 * PI) / state.orbit_subdivisions as f32;
@@ -648,7 +659,7 @@ fn draw_orbits(
         for i in 0..state.orbit_subdivisions {
             let t = i as f32 * step;
 
-            let position = orbit.position_at_true_anomaly(t);
+            let position = orbit.position_at_true_anomaly(state.star_mass, t);
             let position = zup2yup(position) * state.distance_scaling;
 
             lines.line_colored(prev_position, position, 0.0, color);
@@ -668,23 +679,22 @@ fn draw_orbits(
             let position = zup2yup(position);
             let velocity = zup2yup(velocity);
 
-            debug_arrows.draw_arrow(Vec3::ZERO, position * state.distance_scaling, color);
-            debug_arrows.draw_arrow(
-                position,
-                position + (state.velocity_scale * velocity),
-                color,
-            );
+            let p = position * state.distance_scaling;
+            let v = velocity * state.distance_scaling;
+
+            debug_arrows.draw_arrow(Vec3::ZERO, p, color);
+            debug_arrows.draw_arrow(p, p + v, Color::RED);
         }
 
         if state.show_nodes {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.ascending_node()) * state.distance_scaling,
+                zup2yup(orbit.ascending_node(state.star_mass)) * state.distance_scaling,
                 Color::YELLOW_GREEN,
             );
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.descending_node()) * state.distance_scaling,
+                zup2yup(orbit.descending_node(state.star_mass)) * state.distance_scaling,
                 Color::YELLOW,
             );
         }
@@ -692,12 +702,12 @@ fn draw_orbits(
         if state.show_peri_and_apo_apsis {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.periapsis()) * state.distance_scaling,
+                zup2yup(orbit.periapsis(state.star_mass)) * state.distance_scaling,
                 Color::WHITE,
             );
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.apoapsis()) * state.distance_scaling,
+                zup2yup(orbit.apoapsis(state.star_mass)) * state.distance_scaling,
                 Color::WHITE,
             );
         }

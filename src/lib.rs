@@ -162,20 +162,20 @@ impl KeplerianElements {
         }
     }
 
-    pub fn ascending_node(&self) -> Vec3 {
-        self.position_at_true_anomaly(PI + self.argument_of_periapsis)
+    pub fn ascending_node(&self, mass: f32) -> Vec3 {
+        self.position_at_true_anomaly(mass, (PI / 2.0) - self.argument_of_periapsis)
     }
 
-    pub fn descending_node(&self) -> Vec3 {
-        self.position_at_true_anomaly(self.argument_of_periapsis)
+    pub fn descending_node(&self, mass: f32) -> Vec3 {
+        self.position_at_true_anomaly(mass, PI + (PI / 2.0) - self.argument_of_periapsis)
     }
 
-    pub fn periapsis(&self) -> Vec3 {
-        self.position_at_true_anomaly(0.0)
+    pub fn periapsis(&self, mass: f32) -> Vec3 {
+        self.position_at_true_anomaly(mass, 0.0)
     }
 
-    pub fn apoapsis(&self) -> Vec3 {
-        self.position_at_true_anomaly(PI)
+    pub fn apoapsis(&self, mass: f32) -> Vec3 {
+        self.position_at_true_anomaly(mass, PI)
     }
 
     pub fn normal(&self) -> Vec3 {
@@ -206,6 +206,7 @@ impl KeplerianElements {
         self.mean_anomaly_at_epoch + Self::mean_motion(h, e, mass) * epoch_diff
     }
 
+    /// Mean motion
     /// https://en.wikipedia.org/wiki/Mean_anomaly
     pub fn mean_motion(h: Num, e: Num, mass: Num) -> Num {
         let μ = Self::standard_gravitational_parameter(mass);
@@ -224,7 +225,7 @@ impl KeplerianElements {
         self.mean_anomaly_at_epoch + Self::hyperbolic_mean_motion(h, e, mass) * epoch_diff
     }
 
-    /// Hyperbolic mean anomaly
+    /// Hyperbolic mean motion
     /// SRC: https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-hyperbolic-mean-anomaly
     pub fn hyperbolic_mean_motion(h: Num, e: Num, mass: Num) -> Num {
         let μ = Self::standard_gravitational_parameter(mass);
@@ -279,31 +280,21 @@ impl KeplerianElements {
         let v = self.true_anomaly_at_epoch(mass, epoch, tolerance);
 
         StateVectors {
-            position: self.position_at_true_anomaly(v),
+            position: self.position_at_true_anomaly(mass, v),
             velocity: self.velocity_at_true_anomaly(mass, v),
         }
     }
 
-    pub fn position_at_true_anomaly(&self, v: Num) -> Vec3 {
-        let a = self.semi_major_axis;
+    pub fn position_at_true_anomaly(&self, mass: Num, v: Num) -> Vec3 {
         let e = self.eccentricity;
+        let h = self.specific_angular_momentum(mass);
+        let μ = Self::standard_gravitational_parameter(mass);
+
+        let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
 
         // Perifocal coordinates
-        let (p, q) = if self.is_hyperbolic() {
-            let r = (a * (e.powi(2) - 1.0)) / (1.0 + e * v.cos());
-
-            let p = r * v.sin();
-            let q = r * v.cos();
-
-            (p, q)
-        } else {
-            let r = (a * (1.0 - e.powi(2))) / (1.0 + e * v.cos());
-
-            let p = r * v.sin();
-            let q = r * v.cos();
-
-            (p, q)
-        };
+        let p = r * v.sin();
+        let q = r * v.cos();
 
         let position = vec3(p, q, 0.0);
 
@@ -315,14 +306,12 @@ impl KeplerianElements {
         let h = self.specific_angular_momentum(mass);
         let μ = Self::standard_gravitational_parameter(mass);
 
-        let v_mag = μ / h;
+        let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
 
-        let (vp, vq) = if self.is_hyperbolic() {
-            (-v_mag * v.sin(), v_mag * (e + v.cos()))
-        } else {
-            (-v_mag * v.sin(), v_mag * (e + v.cos()))
-        };
+        let vmag = r / (1.0 + e * v.cos());
 
+        let vp = (v.cos() + e) * vmag;
+        let vq = -v.sin() * vmag;
         let velocity = vec3(vp, vq, 0.0);
 
         self.perifocal_to_equatorial(velocity)
