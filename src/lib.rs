@@ -70,15 +70,21 @@ impl KeplerianElements {
         let hv = rv.cross(vv);
         let h = hv.length();
 
-        // Inclination
-        // Equation is i = arccos(hz / h)
-        let i = (hv.z / h).acos();
+        // Eccentricity
+        let μ = Self::standard_gravitational_parameter(mass);
+        let ev = (1.0 / μ) * ((v_mag.powi(2) - (μ / r)) * rv - rv.dot(vv));
+        let e = ev.length();
+
+        let is_hyperbolic = e >= 1.0; // or parabolic
 
         // Right ascension of the ascending node
 
-        // N vector and magnitude - it's the vector
-        // parallel to the node line
+        // N vector - it's the vector parallel to the node line
         let nv = Vec3::Z.cross(hv).normalize();
+
+        // Inclination
+        // Equation is i = arccos(hz / h)
+        let i = (hv.z / h).acos();
 
         // We find the angle between the node line & the X axis
         let mut Ω = PI - nv.x.acos();
@@ -90,14 +96,6 @@ impl KeplerianElements {
         if i.abs() < Num::EPSILON {
             Ω = 0.0;
         }
-
-        // Eccentricity
-        let μ = Self::standard_gravitational_parameter(mass);
-        let ev = (1.0 / μ) * ((v_mag.powi(2) - μ / r) * rv - r * vr * vv);
-
-        let e = ev.length();
-
-        let is_hyperbolic = e >= 1.0; // or parabolic
 
         // Argument of periapsis
         let ω = if e == 0.0 {
