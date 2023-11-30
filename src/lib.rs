@@ -70,17 +70,17 @@ impl KeplerianElements {
         let hv = rv.cross(vv);
         let h = hv.length();
 
+        // N vector - it's the vector parallel to the node line
+        let nv = Vec3::Z.cross(hv).normalize();
+
         // Eccentricity
         let μ = Self::standard_gravitational_parameter(mass);
-        let ev = (1.0 / μ) * ((v_mag.powi(2) - (μ / r)) * rv - rv.dot(vv));
+        let ev = (1.0 / μ) * ((v_mag.powi(2) - (μ / r)) * rv - rv.dot(vv) * vv);
         let e = ev.length();
 
         let is_hyperbolic = e >= 1.0; // or parabolic
 
         // Right ascension of the ascending node
-
-        // N vector - it's the vector parallel to the node line
-        let nv = Vec3::Z.cross(hv).normalize();
 
         // Inclination
         // Equation is i = arccos(hz / h)
@@ -291,8 +291,8 @@ impl KeplerianElements {
         let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
 
         // Perifocal coordinates
-        let p = r * v.cos();
-        let q = r * v.sin();
+        let p = r * v.sin();
+        let q = r * v.cos();
 
         let position = vec3(p, q, 0.0);
 
@@ -302,10 +302,10 @@ impl KeplerianElements {
     pub fn velocity_at_true_anomaly(&self, mass: Num, v: Num) -> Vec3 {
         let e = self.eccentricity;
         let h = self.specific_angular_momentum(mass);
+        let μ = Self::standard_gravitational_parameter(mass);
 
-        let f = 1.0 / h.powi(2);
-        let vp = -f * v.sin();
-        let vq = f * (e + v.cos());
+        let vp = (μ / h) * (e + v.cos());
+        let vq = -(μ / h) * v.sin();
 
         self.perifocal_to_equatorial(vec3(vp, vq, 0.0))
     }
