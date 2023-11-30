@@ -59,19 +59,14 @@ impl KeplerianElements {
         let vv = sv.velocity;
         let v_mag = vv.length();
 
-        // Radial velocity
-        let vr = vv.dot(rv / r);
-
-        // Azimuthal velocity
-        let _vz = (v_mag.powi(2) - vr.powi(2)).sqrt();
-
         // Orbital angular momentum
         // This vector should point in the normal direction of the orbit
         let hv = rv.cross(vv);
         let h = hv.length();
 
         // N vector - it's the vector parallel to the node line
-        let nv = Vec3::Z.cross(hv).normalize();
+        let nv = Vec3::Z.cross(hv);
+        let n = nv.length();
 
         // Eccentricity
         let μ = Self::standard_gravitational_parameter(mass);
@@ -87,7 +82,7 @@ impl KeplerianElements {
         let i = (hv.z / h).acos();
 
         // We find the angle between the node line & the X axis
-        let mut Ω = PI - nv.x.acos();
+        let mut Ω = (nv.x / n).acos();
 
         if nv.y < 0.0 {
             Ω = TWO_PI - Ω;
@@ -102,10 +97,10 @@ impl KeplerianElements {
             // For a circular orbit the argument of periapsis is undefined
             0.0
         } else {
-            let mut ω = PI - (ev.dot(nv) / e).acos();
+            let mut ω = (ev.dot(nv) / (e * n)).acos();
 
             if ev.z < 0.0 {
-                ω = TWO_PI - ω;
+                ω = TWO_PI + ω;
             }
 
             ω
@@ -119,10 +114,10 @@ impl KeplerianElements {
         };
 
         // True anomaly
-        let mut v = (rv / r).dot(ev / e).acos();
+        let mut v = (rv.dot(ev) / (r * e)).acos();
 
-        if vr < 0.0 {
-            v = TWO_PI - v;
+        if (rv.dot(vv)) < 0.0 {
+            v = PI + v;
         }
 
         // Hyperbolic mean anomaly calculation
@@ -161,11 +156,11 @@ impl KeplerianElements {
     }
 
     pub fn ascending_node(&self, mass: f32) -> Vec3 {
-        self.position_at_true_anomaly(mass, (PI / 2.0) - self.argument_of_periapsis)
+        self.position_at_true_anomaly(mass, self.argument_of_periapsis)
     }
 
     pub fn descending_node(&self, mass: f32) -> Vec3 {
-        self.position_at_true_anomaly(mass, PI + (PI / 2.0) - self.argument_of_periapsis)
+        self.position_at_true_anomaly(mass, PI + self.argument_of_periapsis)
     }
 
     pub fn periapsis(&self, mass: f32) -> Vec3 {
@@ -291,8 +286,8 @@ impl KeplerianElements {
         let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
 
         // Perifocal coordinates
-        let p = r * v.sin();
-        let q = r * v.cos();
+        let p = r * v.cos();
+        let q = r * v.sin();
 
         let position = vec3(p, q, 0.0);
 
@@ -304,19 +299,25 @@ impl KeplerianElements {
         let h = self.specific_angular_momentum(mass);
         let μ = Self::standard_gravitational_parameter(mass);
 
-        let vp = (μ / h) * (e + v.cos());
-        let vq = -(μ / h) * v.sin();
+        let vp = -(μ / h) * v.sin();
+        let vq = (μ / h) * (e + v.cos());
 
         self.perifocal_to_equatorial(vec3(vp, vq, 0.0))
     }
 
     #[inline(always)]
     pub fn perifocal_to_equatorial(&self, perifocal: Vec3) -> Vec3 {
+        let mut m = Mat3::IDENTITY;
+
         let Ω = self.right_ascension_of_the_ascending_node;
         let i = self.inclination;
         let ω = self.argument_of_periapsis;
 
-        let m = Mat3::from_rotation_z(-Ω) * (Mat3::from_rotation_x(-i) * Mat3::from_rotation_z(-ω));
+        // let m = Mat3::from_rotation_z(-Ω) * (Mat3::from_rotation_x(-i) * Mat3::from_rotation_z(-ω));
+
+        m *= Mat3::from_rotation_z(-Ω);
+        m *= Mat3::from_rotation_x(-i);
+        m *= Mat3::from_rotation_z(-ω);
 
         m.mul_vec3(perifocal)
     }
@@ -360,5 +361,75 @@ impl KeplerianElements {
     pub fn is_hyperbolic(&self) -> bool {
         // TODO: We ignore the parabolic case of e == 1.0
         self.eccentricity >= 1.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+
+    use super::*;
+
+    const MASS: f32 = 100_000_000_000.0;
+    const EPOCH: f32 = 0.0;
+    const MAX_ABS_DIFF: f32 = 0.0001;
+    const TOLERANCE: f32 = 0.0001;
+
+    #[test]
+    fn conversion() {
+        let position = vec3(125.0, 0.0, 1.0);
+        let velocity = vec3(0.0000000001, 0.0001, 0.0000000001);
+
+        let sv = StateVectors::new(position, velocity);
+        let elements = KeplerianElements::state_vectors_to_orbit(sv, MASS, EPOCH);
+        println!("Elements: {elements:#?}");
+
+        let sv_converted = elements.state_vectors_at_epoch(MASS, EPOCH, TOLERANCE);
+        println!("State vectors converted: {sv_converted:#?}");
+
+        let elements_converted =
+            KeplerianElements::state_vectors_to_orbit(sv_converted, MASS, EPOCH);
+        println!("Elements converted: {elements_converted:#?}");
+
+        assert!(
+            sv.position.abs_diff_eq(sv_converted.position, MAX_ABS_DIFF),
+            "Position {:?} not equal {:?}",
+            sv.position,
+            sv_converted.position
+        );
+        assert!(
+            sv.velocity.abs_diff_eq(sv_converted.velocity, MAX_ABS_DIFF),
+            "Velocity {:?} not equal {:?}",
+            sv.velocity,
+            sv_converted.velocity
+        );
+    }
+
+    #[test_case(0.0, vec3(0.0, 1.0, 0.0))]
+    #[test_case(PI / 2.0, vec3(1.0, 0.0, 0.0))]
+    #[test_case(PI, vec3(0.0, -1.0, 0.0))]
+    #[test_case(PI + (PI / 2.0), vec3(-1.0, 0.0, 0.0))]
+    fn elements_to_position(v: f32, exp: Vec3) {
+        let elements = KeplerianElements {
+            eccentricity: 0.0,
+            semi_major_axis: 1.0,
+            inclination: 0.0,
+            right_ascension_of_the_ascending_node: 0.0,
+            argument_of_periapsis: 0.0,
+            mean_anomaly_at_epoch: 0.0,
+            epoch: 0.0,
+        };
+
+        let position = elements.position_at_true_anomaly(MASS, v);
+        let velocity = elements.velocity_at_true_anomaly(MASS, v);
+
+        println!("velocity = {velocity:#?}");
+
+        assert!(
+            position.abs_diff_eq(exp, MAX_ABS_DIFF),
+            "Position {:?} not equal {:?}",
+            position,
+            exp
+        );
     }
 }

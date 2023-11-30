@@ -386,6 +386,36 @@ fn setup(
 
     spawn_solar_system(&mut commands, sphere, materials.as_mut());
 
+    // let mut planet_material = |color: Color| {
+    //     materials.add(StandardMaterial {
+    //         base_color: color,
+    //         emissive: color,
+    //         perceptual_roughness: 1.0,
+    //         ..Default::default()
+    //     })
+    // };
+
+    // commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::BEIGE),
+    //         ..Default::default()
+    //     })
+    //     .insert(Planet {
+    //         orbit: KeplerianElements {
+    //             semi_major_axis: 0.38709927 * AU,
+    //             eccentricity: 0.20563593,
+    //             inclination: 0.12,
+    //             right_ascension_of_the_ascending_node: 0.84,
+    //             argument_of_periapsis: 1.35,
+    //             mean_anomaly_at_epoch: 4.40,
+    //             epoch: 0.0, // Example epoch year
+    //         },
+    //         state_vectors: StateVectors::default(),
+    //         mass: 3.285,
+    //     })
+    //     .insert(Name::new("Test Planet"));
+
     commands
         .spawn(Camera3dBundle::default())
         .insert(BloomSettings {
@@ -640,7 +670,8 @@ fn update_camera_focus(
 
 fn draw_orbits(
     mut lines: ResMut<DebugLines>,
-    planets: Query<&Planet>,
+    planets: Query<(&Planet, &Handle<StandardMaterial>)>,
+    materials: Res<Assets<StandardMaterial>>,
     state: Res<State>,
     camera: Query<&GlobalTransform, With<Camera>>,
 ) {
@@ -653,8 +684,9 @@ fn draw_orbits(
 
     let color = Color::RED;
 
-    for planet in planets.iter() {
+    for (planet, mat) in planets.iter() {
         let orbit = &planet.orbit;
+        let color = materials.get(mat).unwrap().base_color;
 
         let first_position =
             zup2yup(orbit.position_at_true_anomaly(state.star_mass, 0.0)) * state.distance_scaling;
