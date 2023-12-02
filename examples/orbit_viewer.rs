@@ -694,8 +694,6 @@ fn draw_orbits(
     let camera = camera.single();
     let camera_position = camera.translation();
 
-    let color = Color::RED;
-
     for (planet, mat) in planets.iter() {
         let orbit = &planet.orbit;
         let color = materials.get(mat).unwrap().base_color;
