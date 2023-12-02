@@ -117,7 +117,7 @@ impl KeplerianElements {
         let mut v = (rv.dot(ev) / (r * e)).acos();
 
         if (rv.dot(vv)) < 0.0 {
-            v = PI + v;
+            v = TWO_PI - v;
         }
 
         // Hyperbolic mean anomaly calculation
