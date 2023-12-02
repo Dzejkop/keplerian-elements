@@ -156,11 +156,11 @@ impl KeplerianElements {
     }
 
     pub fn ascending_node(&self, mass: f32) -> Vec3 {
-        self.position_at_true_anomaly(mass, self.argument_of_periapsis)
+        self.position_at_true_anomaly(mass, -self.argument_of_periapsis)
     }
 
     pub fn descending_node(&self, mass: f32) -> Vec3 {
-        self.position_at_true_anomaly(mass, PI + self.argument_of_periapsis)
+        self.position_at_true_anomaly(mass, PI - self.argument_of_periapsis)
     }
 
     pub fn periapsis(&self, mass: f32) -> Vec3 {
