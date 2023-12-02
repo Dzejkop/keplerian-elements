@@ -313,11 +313,9 @@ impl KeplerianElements {
         let i = self.inclination;
         let ω = self.argument_of_periapsis;
 
-        // let m = Mat3::from_rotation_z(-Ω) * (Mat3::from_rotation_x(-i) * Mat3::from_rotation_z(-ω));
-
-        m *= Mat3::from_rotation_z(-Ω);
-        m *= Mat3::from_rotation_x(-i);
-        m *= Mat3::from_rotation_z(-ω);
+        m *= Mat3::from_rotation_z(Ω);
+        m *= Mat3::from_rotation_x(i);
+        m *= Mat3::from_rotation_z(ω);
 
         m.mul_vec3(perifocal)
     }

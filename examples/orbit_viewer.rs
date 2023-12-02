@@ -14,6 +14,8 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::{LookTransform, LookTransformPlugin};
 
+const USE_REAL_SOLAR_SYSTEM: bool = true;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -384,37 +386,11 @@ fn setup(
         .insert(NotShadowCaster)
         .insert(Star);
 
-    spawn_solar_system(&mut commands, sphere, materials.as_mut());
-
-    // let mut planet_material = |color: Color| {
-    //     materials.add(StandardMaterial {
-    //         base_color: color,
-    //         emissive: color,
-    //         perceptual_roughness: 1.0,
-    //         ..Default::default()
-    //     })
-    // };
-
-    // commands
-    //     .spawn(PbrBundle {
-    //         mesh: sphere.clone(),
-    //         material: planet_material(Color::BEIGE),
-    //         ..Default::default()
-    //     })
-    //     .insert(Planet {
-    //         orbit: KeplerianElements {
-    //             semi_major_axis: 0.38709927 * AU,
-    //             eccentricity: 0.20563593,
-    //             inclination: 0.12,
-    //             right_ascension_of_the_ascending_node: 0.84,
-    //             argument_of_periapsis: 1.35,
-    //             mean_anomaly_at_epoch: 4.40,
-    //             epoch: 0.0, // Example epoch year
-    //         },
-    //         state_vectors: StateVectors::default(),
-    //         mass: 3.285,
-    //     })
-    //     .insert(Name::new("Test Planet"));
+    if USE_REAL_SOLAR_SYSTEM {
+        spawn_solar_system(&mut commands, sphere, materials.as_mut());
+    } else {
+        spawn_test_system(&mut commands, sphere, materials.as_mut());
+    }
 
     commands
         .spawn(Camera3dBundle::default())
@@ -436,6 +412,42 @@ fn setup(
             Vec3::new(0., 0., 0.),
             Vec3::Y,
         ));
+}
+
+fn spawn_test_system(
+    commands: &mut Commands,
+    sphere: Handle<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+) {
+    let mut planet_material = |color: Color| {
+        materials.add(StandardMaterial {
+            base_color: color,
+            emissive: color,
+            perceptual_roughness: 1.0,
+            ..Default::default()
+        })
+    };
+
+    commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::GREEN),
+            ..Default::default()
+        })
+        .insert(Planet {
+            orbit: KeplerianElements {
+                eccentricity: 0.04854,
+                semi_major_axis: 5.2025 * AU,
+                inclination: 0.02267182698340634120423874308267,
+                right_ascension_of_the_ascending_node: 1.7503907068251131326967694717172,
+                argument_of_periapsis: 0.24905848425959083062701067266333,
+                mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
+                epoch: 0.0,
+            },
+            state_vectors: StateVectors::default(),
+            mass: 1.898e4,
+        })
+        .insert(Name::new("Test Planet"));
 }
 
 fn spawn_solar_system(
