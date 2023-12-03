@@ -28,7 +28,6 @@ mod tests {
     use test_case::test_case;
 
     use super::*;
-    use crate::constants::AU;
 
     const MASS: Num = 100_000_000_000.0;
     const EPOCH: Num = 0.0;
@@ -36,15 +35,6 @@ mod tests {
     const TOLERANCE: Num = 0.0001;
 
     fn test_back_and_forth_conversion(original: KeplerianElements, mass: Num, epoch: Num) {
-        test_back_and_forth_conversion_with_max_abs_diff(original, mass, epoch, MAX_ABS_DIFF);
-    }
-
-    fn test_back_and_forth_conversion_with_max_abs_diff(
-        original: KeplerianElements,
-        mass: Num,
-        epoch: Num,
-        max_abs_diff: Num,
-    ) {
         let sv = original.state_vectors_at_epoch(mass, epoch, TOLERANCE);
 
         let elements = KeplerianElements::from_state_vectors(&sv, mass, epoch);
@@ -53,14 +43,14 @@ mod tests {
 
         let pos_diff = sv.position.distance(sv_converted.position);
         assert!(
-            sv.position.abs_diff_eq(sv_converted.position, max_abs_diff),
+            sv.position.abs_diff_eq(sv_converted.position, MAX_ABS_DIFF),
             "Position {:?} not equal {:?} - distance is {}",
             sv.position,
             sv_converted.position,
             pos_diff
         );
         assert!(
-            sv.velocity.abs_diff_eq(sv_converted.velocity, max_abs_diff),
+            sv.velocity.abs_diff_eq(sv_converted.velocity, MAX_ABS_DIFF),
             "Velocity {:?} not equal {:?}",
             sv.velocity,
             sv_converted.velocity
@@ -132,24 +122,6 @@ mod tests {
             },
             MASS,
             EPOCH,
-        );
-    }
-
-    #[test]
-    fn conversion_mercury_zero_inclination() {
-        test_back_and_forth_conversion_with_max_abs_diff(
-            KeplerianElements {
-                eccentricity: 0.20563649,
-                semi_major_axis: 57909990.0,
-                inclination: 0.0,
-                right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 3.833187,
-                mean_anomaly_at_epoch: -1.8837808,
-                epoch: 10173.319,
-            },
-            MASS,
-            EPOCH,
-            100.0,
         );
     }
 

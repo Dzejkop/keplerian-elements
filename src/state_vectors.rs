@@ -30,13 +30,15 @@ impl StateVectors {
 
         // N vector - vector that lies on the node line in the direction of the ascending node
         let mut nv = Vec3::Z.cross(hv);
-        let mut n = nv.length();
 
+        // If inclinations is 0 this vector will be zero as well
+        // since a lot of other arguments depend on this vector
+        // we set it to the X axis
         if nv.length() < Num::EPSILON {
-            // Arbitrary vector perpendicular to Z
-            nv = Vec3::X * r;
-            n = nv.length();
+            nv = Vec3::X;
         }
+
+        let nv = nv.normalize();
 
         // Eccentricity
         let μ = standard_gravitational_parameter(mass);
@@ -53,7 +55,7 @@ impl StateVectors {
         let i = (hv.z / h).acos();
 
         // We find the angle between the node line & the X axis
-        let mut Ω = (nv.x / n).acos();
+        let mut Ω = (nv.x).acos();
 
         if nv.y < 0.0 {
             Ω = TWO_PI - Ω;
@@ -64,7 +66,7 @@ impl StateVectors {
         }
 
         // Argument of periapsis
-        let mut ω = (ev / e).dot(nv / n).acos();
+        let mut ω = (ev / e).dot(nv).acos();
 
         if ev.z < 0.0 {
             ω = TWO_PI - ω;
