@@ -14,7 +14,7 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::{LookTransform, LookTransformPlugin};
 
-const USE_REAL_SOLAR_SYSTEM: bool = true;
+const USE_REAL_SOLAR_SYSTEM: bool = false;
 
 fn main() {
     App::new()
@@ -174,11 +174,7 @@ fn ui(
                             yup2zup(v / (state.distance_scaling * state.velocity_scaling));
 
                         // let sv = sv.clone();
-                        planet.orbit = KeplerianElements::state_vectors_to_orbit(
-                            sv.clone(),
-                            state.star_mass,
-                            state.epoch,
-                        );
+                        planet.orbit = sv.to_elements(state.star_mass, state.epoch);
                     });
                 });
             }
