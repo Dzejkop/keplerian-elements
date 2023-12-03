@@ -2,6 +2,7 @@ use crate::astro::standard_gravitational_parameter;
 use crate::{KeplerianElements, Num, Vec3, TWO_PI};
 
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StateVectors {
     pub position: Vec3,
     pub velocity: Vec3,

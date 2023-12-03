@@ -2,6 +2,7 @@ use crate::math::newton_approx;
 use crate::{vec3, Mat3, Num, StateVectors, Vec3, G, PI, TWO_PI};
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeplerianElements {
     pub eccentricity: Num,
     pub semi_major_axis: Num,
@@ -11,6 +12,7 @@ pub struct KeplerianElements {
     pub mean_anomaly_at_epoch: Num,
     pub epoch: Num,
 }
+
 impl KeplerianElements {
     pub fn angle_abs_diff(&self, other: &Self) -> Num {
         let mut diff = 0.0;
