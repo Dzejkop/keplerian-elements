@@ -175,6 +175,7 @@ fn ui(
 
                         // let sv = sv.clone();
                         planet.orbit = sv.to_elements(state.star_mass, state.epoch);
+                        println!("planet.orbit = {:?}", planet.orbit);
                     });
                 });
             }
@@ -427,21 +428,21 @@ fn spawn_test_system(
     commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
-            material: planet_material(Color::GREEN),
+            material: planet_material(Color::BEIGE),
             ..Default::default()
         })
         .insert(Planet {
             orbit: KeplerianElements {
-                eccentricity: 0.04854,
-                semi_major_axis: 5.2025 * AU,
-                inclination: 0.02267182698340634120423874308267,
-                right_ascension_of_the_ascending_node: 1.7503907068251131326967694717172,
-                argument_of_periapsis: 0.24905848425959083062701067266333,
-                mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
-                epoch: 0.0,
+                semi_major_axis: 0.38709927 * AU,
+                eccentricity: 0.20563593,
+                inclination: 0.12,
+                right_ascension_of_the_ascending_node: 0.84,
+                argument_of_periapsis: 1.35,
+                mean_anomaly_at_epoch: 4.40,
+                epoch: 0.0, // Example epoch year
             },
             state_vectors: StateVectors::default(),
-            mass: 1.898e4,
+            mass: 3.285,
         })
         .insert(Name::new("Test Planet"));
 }

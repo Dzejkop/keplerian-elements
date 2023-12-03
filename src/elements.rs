@@ -145,8 +145,6 @@ impl KeplerianElements {
 
     pub fn state_vectors_at_epoch(&self, mass: Num, epoch: Num, tolerance: Num) -> StateVectors {
         // Lowercase nu
-        println!();
-        println!("Converting elements ({self:?}) to state vectors");
         let v = self.true_anomaly_at_epoch(mass, epoch, tolerance);
 
         StateVectors {

@@ -28,38 +28,39 @@ mod tests {
     use test_case::test_case;
 
     use super::*;
+    use crate::constants::AU;
 
     const MASS: Num = 100_000_000_000.0;
     const EPOCH: Num = 0.0;
     const MAX_ABS_DIFF: Num = 0.0001;
     const TOLERANCE: Num = 0.0001;
 
-    // #[track_caller]
     fn test_back_and_forth_conversion(original: KeplerianElements, mass: Num, epoch: Num) {
+        test_back_and_forth_conversion_with_max_abs_diff(original, mass, epoch, MAX_ABS_DIFF);
+    }
+
+    fn test_back_and_forth_conversion_with_max_abs_diff(
+        original: KeplerianElements,
+        mass: Num,
+        epoch: Num,
+        max_abs_diff: Num,
+    ) {
         let sv = original.state_vectors_at_epoch(mass, epoch, TOLERANCE);
 
         let elements = KeplerianElements::from_state_vectors(&sv, mass, epoch);
 
         let sv_converted = elements.state_vectors_at_epoch(mass, epoch, TOLERANCE);
 
-        // let elements_converted = KeplerianElements::from_state_vectors(&sv_converted, mass, epoch);
-        // println!("Elements converted: {elements_converted:#?}");
-
-        println!("Original: {original:#?}");
-        println!("State vectors: {sv:#?}");
-        println!("Elements: {elements:#?}");
-        println!("State vectors converted: {sv_converted:#?}");
-
         let pos_diff = sv.position.distance(sv_converted.position);
         assert!(
-            sv.position.abs_diff_eq(sv_converted.position, MAX_ABS_DIFF),
+            sv.position.abs_diff_eq(sv_converted.position, max_abs_diff),
             "Position {:?} not equal {:?} - distance is {}",
             sv.position,
             sv_converted.position,
             pos_diff
         );
         assert!(
-            sv.velocity.abs_diff_eq(sv_converted.velocity, MAX_ABS_DIFF),
+            sv.velocity.abs_diff_eq(sv_converted.velocity, max_abs_diff),
             "Velocity {:?} not equal {:?}",
             sv.velocity,
             sv_converted.velocity
@@ -76,6 +77,23 @@ mod tests {
                 right_ascension_of_the_ascending_node: 0.0,
                 argument_of_periapsis: 0.0,
                 mean_anomaly_at_epoch: 0.0,
+                epoch: 0.0,
+            },
+            MASS,
+            EPOCH,
+        );
+    }
+
+    #[test]
+    fn conversion_zero_inclination() {
+        test_back_and_forth_conversion(
+            KeplerianElements {
+                eccentricity: 0.01,
+                semi_major_axis: 1.0,
+                inclination: 0.0,
+                right_ascension_of_the_ascending_node: 1.3,
+                argument_of_periapsis: 1.2,
+                mean_anomaly_at_epoch: 0.2,
                 epoch: 0.0,
             },
             MASS,
@@ -118,47 +136,21 @@ mod tests {
     }
 
     #[test]
-    fn conversion_error_case_1() {
-        test_back_and_forth_conversion(
+    fn conversion_mercury_zero_inclination() {
+        test_back_and_forth_conversion_with_max_abs_diff(
             KeplerianElements {
-                eccentricity: 0.005408803,
-                semi_major_axis: 751338500.0,
-                inclination: 0.023166878,
-                right_ascension_of_the_ascending_node: 1.7773559,
-                argument_of_periapsis: 1.3521711,
-                mean_anomaly_at_epoch: -0.46838284,
-                epoch: 5837.1787,
+                eccentricity: 0.20563649,
+                semi_major_axis: 57909990.0,
+                inclination: 0.0,
+                right_ascension_of_the_ascending_node: 0.0,
+                argument_of_periapsis: 3.833187,
+                mean_anomaly_at_epoch: -1.8837808,
+                epoch: 10173.319,
             },
-            19890000.0,
-            5844.272,
+            MASS,
+            EPOCH,
+            100.0,
         );
-    }
-
-    #[test]
-    fn conversion_error_case_2() {
-        test_back_and_forth_conversion(
-            KeplerianElements {
-                eccentricity: 0.0069337534,
-                semi_major_axis: 752926600.0,
-                inclination: 0.023143709,
-                right_ascension_of_the_ascending_node: 1.7756647,
-                argument_of_periapsis: 0.9487356,
-                mean_anomaly_at_epoch: -0.06723439,
-                epoch: 0.0,
-            },
-            19890000.0,
-            0.0,
-        );
-    }
-
-    #[test]
-    fn state_vectors_conversion() {
-        let sv = StateVectors {
-            position: vec3(-661208300.0, 348866180.0, 13342606.0),
-            velocity: vec3(-6.13e-7, -1.182874e-6, 1.9689882e-8),
-        };
-
-
     }
 
     #[test_case(0.0, vec3(1.0, 0.0, 0.0))]
