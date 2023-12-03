@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-glam = "0.22"
+glam = "0.24.2"
 
 [dev-dependencies]
 bevy = "0.9"
