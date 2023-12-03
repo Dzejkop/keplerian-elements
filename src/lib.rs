@@ -141,9 +141,6 @@ mod tests {
         };
 
         let position = elements.position_at_true_anomaly(MASS, v);
-        let velocity = elements.velocity_at_true_anomaly(MASS, v);
-
-        println!("velocity = {velocity:#?}");
 
         assert!(
             position.abs_diff_eq(exp, MAX_ABS_DIFF),

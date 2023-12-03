@@ -12,10 +12,9 @@ license = "MIT"
 glam = "0.24.2"
 
 [dev-dependencies]
-bevy = "0.9"
-bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
-smooth-bevy-cameras = "0.7"
-bevy_egui = "0.19"
+bevy = "0.12.1"
+smooth-bevy-cameras = "0.10"
+bevy_egui = "0.23"
 test-case = "3.3.1"
 
 [features]

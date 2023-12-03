@@ -6,5 +6,6 @@ A Bevy powered orbit viewer.
 
 ![Screenshot](repo/screenshot.png)
 
+```
 cargo run --release --example orbit_viewer
 ```

@@ -4,8 +4,7 @@ use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::egui::{ComboBox, DragValue, Ui};
-use bevy_egui::{egui, EguiContext, EguiPlugin};
-use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use keplerian_elements::constants::AU;
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
@@ -19,19 +18,18 @@ const USE_REAL_SOLAR_SYSTEM: bool = false;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(LookTransformPlugin)
-        .add_plugin(DebugLinesPlugin::default())
-        .add_plugin(OrbitCameraPlugin::new(false))
-        .add_plugin(EguiPlugin)
-        .add_startup_system(setup)
-        .add_system(ui)
-        .add_system(update_epoch)
-        .add_system(draw_orbits)
-        .add_system(update_planets)
-        .add_system(update_star)
-        .add_system(draw_axis)
-        .add_system(draw_soi)
-        .add_system(update_camera_focus)
+        .add_plugins(LookTransformPlugin)
+        .add_plugins(OrbitCameraPlugin::new(false))
+        .add_plugins(EguiPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(Update, ui)
+        .add_systems(Update, update_epoch)
+        .add_systems(Update, draw_orbits)
+        .add_systems(Update, update_planets)
+        .add_systems(Update, update_star)
+        .add_systems(Update, draw_axis)
+        .add_systems(Update, draw_soi)
+        .add_systems(Update, update_camera_focus)
         .run();
 }
 
@@ -78,7 +76,7 @@ struct Planet {
 struct Star;
 
 fn ui(
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_context: EguiContexts,
     mut state: ResMut<State>,
     mut planets: Query<(&mut Planet, &Name)>,
     mut camera: Query<&mut OrbitCameraController>,
@@ -173,9 +171,7 @@ fn ui(
                         sv.velocity =
                             yup2zup(v / (state.distance_scaling * state.velocity_scaling));
 
-                        // let sv = sv.clone();
                         planet.orbit = sv.to_elements(state.star_mass, state.epoch);
-                        println!("planet.orbit = {:?}", planet.orbit);
                     });
                 });
             }
@@ -352,10 +348,14 @@ fn setup(
         focus_mode: FocusMode::Sun,
     });
 
-    let sphere = meshes.add(Mesh::from(shape::Icosphere {
-        radius: 1.0,
-        subdivisions: 4,
-    }));
+    let sphere = meshes.add(
+        shape::Icosphere {
+            radius: 1.0,
+            subdivisions: 4,
+        }
+        .try_into()
+        .unwrap(),
+    );
 
     let star_material = materials.add(StandardMaterial {
         emissive: Color::YELLOW * 100.0,
@@ -391,11 +391,7 @@ fn setup(
 
     commands
         .spawn(Camera3dBundle::default())
-        .insert(BloomSettings {
-            intensity: 0.9,
-            threshold: 0.7,
-            ..default()
-        })
+        .insert(BloomSettings::OLD_SCHOOL)
         .insert(OrbitCameraBundle::new(
             {
                 let mut controller = OrbitCameraController::default();
@@ -678,7 +674,7 @@ fn update_camera_focus(
 }
 
 fn draw_orbits(
-    mut lines: ResMut<DebugLines>,
+    mut lines: Gizmos,
     planets: Query<(&Planet, &Handle<StandardMaterial>)>,
     materials: Res<Assets<StandardMaterial>>,
     state: Res<State>,
@@ -707,13 +703,13 @@ fn draw_orbits(
             let position = orbit.position_at_true_anomaly(state.star_mass, t);
             let position = zup2yup(position) * state.distance_scaling;
 
-            lines.line_colored(prev_position, position, 0.0, color);
+            lines.line(prev_position, position, color);
 
             prev_position = position;
         }
 
         // Close the loop
-        lines.line_colored(prev_position, first_position, 0.0, color);
+        lines.line(prev_position, first_position, color);
 
         let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
 
@@ -760,7 +756,7 @@ fn draw_orbits(
 }
 
 fn draw_soi(
-    mut lines: ResMut<DebugLines>,
+    mut lines: Gizmos,
     planets: Query<&Planet>,
     state: Res<State>,
     camera: Query<&GlobalTransform, With<Camera>>,
@@ -793,7 +789,7 @@ fn draw_soi(
             let p = rot_matrix * planet_camera_radial;
             let p = pos + p * soi;
 
-            lines.line_colored(prev_pos, p, 0.0, Color::WHITE);
+            lines.line(prev_pos, p, Color::WHITE);
 
             prev_pos = p;
         }
@@ -803,35 +799,25 @@ fn draw_soi(
 const ARROW_WING_LENGTH: f32 = 1.0;
 const ARROW_WING_ANGLE: f32 = 30.0;
 
-fn draw_axis(mut lines: ResMut<DebugLines>, state: Res<State>) {
+fn draw_axis(mut lines: Gizmos, state: Res<State>) {
     if !state.draw_axis {
         return;
     }
 
     const ORIGIN: Vec3 = Vec3::ZERO;
 
-    lines.line_colored(ORIGIN, ORIGIN + state.axis_scale * Vec3::X, 0.0, Color::RED);
-    lines.line_colored(
-        ORIGIN,
-        ORIGIN + state.axis_scale * Vec3::Y,
-        0.0,
-        Color::GREEN,
-    );
-    lines.line_colored(
-        ORIGIN,
-        ORIGIN + state.axis_scale * Vec3::Z,
-        0.0,
-        Color::BLUE,
-    );
+    lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::X, Color::RED);
+    lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::Y, Color::GREEN);
+    lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::Z, Color::BLUE);
 }
 
-struct DebugArrows<'a> {
-    lines: &'a mut DebugLines,
+struct DebugArrows<'a, 'g> {
+    lines: &'a mut Gizmos<'g>,
     camera_position: Vec3,
 }
 
-impl<'a> DebugArrows<'a> {
-    pub fn new(lines: &'a mut DebugLines, camera_position: Vec3) -> Self {
+impl<'a, 'g> DebugArrows<'a, 'g> {
+    pub fn new(lines: &'a mut Gizmos<'g>, camera_position: Vec3) -> Self {
         Self {
             lines,
             camera_position,
@@ -839,7 +825,7 @@ impl<'a> DebugArrows<'a> {
     }
 
     pub fn draw_arrow(&mut self, start: Vec3, end: Vec3, color: Color) {
-        self.lines.line_colored(start, end, 0.0, color);
+        self.lines.line(start, end, color);
 
         let to_start = (start - end).normalize();
         let axis_start = closest_point(self.camera_position, start, end);
@@ -852,8 +838,8 @@ impl<'a> DebugArrows<'a> {
         let wing_1 = (rot_1 * to_start) * ARROW_WING_LENGTH + end;
         let wing_2 = (rot_2 * to_start) * ARROW_WING_LENGTH + end;
 
-        self.lines.line_colored(end, wing_1, 0.0, color);
-        self.lines.line_colored(end, wing_2, 0.0, color);
+        self.lines.line(end, wing_1, color);
+        self.lines.line(end, wing_2, color);
     }
 }
 
