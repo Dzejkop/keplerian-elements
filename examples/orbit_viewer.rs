@@ -5,6 +5,7 @@ use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::egui::{ComboBox, DragValue, Ui};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use keplerian_elements::astro::standard_gravitational_parameter;
 use keplerian_elements::constants::AU;
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
@@ -99,7 +100,11 @@ fn ui(
                             f32::MIN,
                             f32::MAX,
                         );
-                        value_slider(ui, "Eccentricity", &mut orbit.eccentricity);
+                        value_slider(
+                            ui,
+                            "Eccentricity",
+                            &mut orbit.eccentricity,
+                        );
                         value_slider(ui, "Inclination", &mut orbit.inclination);
                         value_slider(
                             ui,
@@ -111,7 +116,11 @@ fn ui(
                             "Argument of periapsis",
                             &mut orbit.argument_of_periapsis,
                         );
-                        value_slider(ui, "Mean anomaly", &mut orbit.mean_anomaly_at_epoch);
+                        value_slider(
+                            ui,
+                            "Mean anomaly",
+                            &mut orbit.mean_anomaly_at_epoch,
+                        );
                         value_slider(ui, "Epoch", &mut orbit.epoch);
 
                         let v = orbit.true_anomaly_at_epoch(
@@ -123,9 +132,12 @@ fn ui(
                         ui.label(format!("True anomaly: {v}",));
 
                         let e = orbit.eccentricity;
-                        let h = orbit.specific_angular_momentum(state.star_mass);
+                        let h =
+                            orbit.specific_angular_momentum(state.star_mass);
                         let μ =
-                            KeplerianElements::standard_gravitational_parameter(state.star_mass);
+                            standard_gravitational_parameter(
+                                state.star_mass,
+                            );
 
                         let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
                         ui.label(format!("r: {r}"));
@@ -139,11 +151,12 @@ fn ui(
                         ui.label(format!("vp: {vp}",));
                         ui.label(format!("vq: {vq}",));
 
-                        planet.state_vectors = planet.orbit.state_vectors_at_epoch(
-                            state.star_mass,
-                            state.epoch,
-                            state.tolerance,
-                        );
+                        planet.state_vectors =
+                            planet.orbit.state_vectors_at_epoch(
+                                state.star_mass,
+                                state.epoch,
+                                state.tolerance,
+                            );
                     });
 
                     // --- State Vectors ---
@@ -151,7 +164,8 @@ fn ui(
                         let sv = &mut planet.state_vectors;
                         ui.label("Position");
 
-                        let mut p = zup2yup(sv.position * state.distance_scaling);
+                        let mut p =
+                            zup2yup(sv.position * state.distance_scaling);
 
                         value_slider(ui, "X", &mut p.x);
                         value_slider(ui, "Y", &mut p.y);
@@ -161,24 +175,36 @@ fn ui(
 
                         ui.label("Velocity");
 
-                        let mut v =
-                            zup2yup(sv.velocity * state.distance_scaling * state.velocity_scaling);
+                        let mut v = zup2yup(
+                            sv.velocity
+                                * state.distance_scaling
+                                * state.velocity_scaling,
+                        );
 
                         value_slider(ui, "Vx", &mut v.x);
                         value_slider(ui, "Vy", &mut v.y);
                         value_slider(ui, "Vz", &mut v.z);
 
-                        sv.velocity =
-                            yup2zup(v / (state.distance_scaling * state.velocity_scaling));
+                        sv.velocity = yup2zup(
+                            v / (state.distance_scaling
+                                * state.velocity_scaling),
+                        );
 
-                        planet.orbit = sv.to_elements(state.star_mass, state.epoch);
+                        planet.orbit =
+                            sv.to_elements(state.star_mass, state.epoch);
                     });
                 });
             }
         });
 
         ui.collapsing("State", |ui| {
-            value_slider_min_max(ui, "Tolerance", &mut state.tolerance, f32::EPSILON, 100.0);
+            value_slider_min_max(
+                ui,
+                "Tolerance",
+                &mut state.tolerance,
+                f32::EPSILON,
+                100.0,
+            );
             value_slider(ui, "Mass", &mut state.star_mass);
             value_slider(ui, "Epoch", &mut state.epoch);
             value_slider(ui, "Epoch scale", &mut state.epoch_scale);
@@ -197,7 +223,11 @@ fn ui(
                     "Show position & velocity",
                 );
 
-                value_slider_u32(ui, "Orbit subdivisions", &mut state.orbit_subdivisions);
+                value_slider_u32(
+                    ui,
+                    "Orbit subdivisions",
+                    &mut state.orbit_subdivisions,
+                );
             }
 
             ui.checkbox(&mut state.draw_soi, "Draw SOI");
@@ -224,17 +254,33 @@ fn ui(
                 ui.label("Mouse rotate sensitivity");
                 ui.horizontal(|ui| {
                     ui.label("x");
-                    ui.add(DragValue::new(&mut camera.mouse_rotate_sensitivity.x).speed(0.01));
+                    ui.add(
+                        DragValue::new(&mut camera.mouse_rotate_sensitivity.x)
+                            .speed(0.01),
+                    );
                     ui.label("y");
-                    ui.add(DragValue::new(&mut camera.mouse_rotate_sensitivity.y).speed(0.01));
+                    ui.add(
+                        DragValue::new(&mut camera.mouse_rotate_sensitivity.y)
+                            .speed(0.01),
+                    );
                 });
 
                 ui.label("Mouse translate sensitivity");
                 ui.horizontal(|ui| {
                     ui.label("x");
-                    ui.add(DragValue::new(&mut camera.mouse_translate_sensitivity.x).speed(0.01));
+                    ui.add(
+                        DragValue::new(
+                            &mut camera.mouse_translate_sensitivity.x,
+                        )
+                        .speed(0.01),
+                    );
                     ui.label("y");
-                    ui.add(DragValue::new(&mut camera.mouse_translate_sensitivity.y).speed(0.01));
+                    ui.add(
+                        DragValue::new(
+                            &mut camera.mouse_translate_sensitivity.y,
+                        )
+                        .speed(0.01),
+                    );
                 });
             });
         }
@@ -273,7 +319,10 @@ fn ui(
 
                 for (_, name) in &planets {
                     if ui
-                        .selectable_label(current == name.to_string(), &name.to_string())
+                        .selectable_label(
+                            current == name.to_string(),
+                            &name.to_string(),
+                        )
                         .clicked()
                     {
                         state.focus_mode = FocusMode::Planet(name.to_string());
@@ -287,7 +336,13 @@ fn value_slider(ui: &mut Ui, name: &str, value: &mut f32) {
     value_slider_min_max(ui, name, value, f32::MIN, f32::MAX)
 }
 
-fn value_slider_min_max(ui: &mut Ui, name: &str, value: &mut f32, min: f32, max: f32) {
+fn value_slider_min_max(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut f32,
+    min: f32,
+    max: f32,
+) {
     value_slider_min_max_with_speed(ui, name, value, min, max, 0.01);
 }
 
@@ -531,7 +586,8 @@ fn spawn_solar_system(
                 eccentricity: 0.09339410,
                 semi_major_axis: 1.52371034 * AU,
                 inclination: 0.03232349774693498376462675303241,
-                right_ascension_of_the_ascending_node: 0.86760317116638123268876668101569,
+                right_ascension_of_the_ascending_node:
+                    0.86760317116638123268876668101569,
                 argument_of_periapsis: 5.8657025501025428421251399347365,
                 mean_anomaly_at_epoch: 6.2034237603634456152598740984391,
                 epoch: 0.0,
@@ -552,7 +608,8 @@ fn spawn_solar_system(
                 eccentricity: 0.04854,
                 semi_major_axis: 5.2025 * AU,
                 inclination: 0.02267182698340634120423874308267,
-                right_ascension_of_the_ascending_node: 1.7503907068251131326967694717172,
+                right_ascension_of_the_ascending_node:
+                    1.7503907068251131326967694717172,
                 argument_of_periapsis: 0.24905848425959083062701067266333,
                 mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
                 epoch: 0.0,
@@ -573,7 +630,8 @@ fn spawn_solar_system(
                 eccentricity: 0.05551,
                 semi_major_axis: 9.5415 * AU,
                 inclination: 0.04352851154473857964847684776611,
-                right_ascension_of_the_ascending_node: 1.9833921619663561312160821893105,
+                right_ascension_of_the_ascending_node:
+                    1.9833921619663561312160821893105,
                 argument_of_periapsis: 1.6207127434019344451313392476185,
                 mean_anomaly_at_epoch: 0.8740608893987602521233843368591,
                 epoch: 0.0,
@@ -594,7 +652,8 @@ fn spawn_solar_system(
                 eccentricity: 0.04686,
                 semi_major_axis: 19.188 * AU,
                 inclination: 0.01349139511791616762962012964042,
-                right_ascension_of_the_ascending_node: 1.2908455147750061550927616923742,
+                right_ascension_of_the_ascending_node:
+                    1.2908455147750061550927616923742,
                 argument_of_periapsis: 3.0094712292138224894895199921049,
                 mean_anomaly_at_epoch: 5.4838245097661835306942363945912,
                 epoch: 0.0,
@@ -615,7 +674,8 @@ fn spawn_solar_system(
                 eccentricity: 0.00895,
                 semi_major_axis: 30.070 * AU,
                 inclination: 0.03089232776029963351154932660225,
-                right_ascension_of_the_ascending_node: 2.3001694212033269494277320637911,
+                right_ascension_of_the_ascending_node:
+                    2.3001694212033269494277320637911,
                 argument_of_periapsis: 0.81471969483095304650797885073048,
                 mean_anomaly_at_epoch: 5.3096406504171494389172520558961,
                 epoch: 0.0,
@@ -632,12 +692,16 @@ fn update_epoch(time: Res<Time>, mut state: ResMut<State>) {
     }
 }
 
-fn update_planets(mut query: Query<(&mut Transform, &mut Planet)>, state: Res<State>) {
+fn update_planets(
+    mut query: Query<(&mut Transform, &mut Planet)>,
+    state: Res<State>,
+) {
     for (mut transform, mut planet) in query.iter_mut() {
-        planet.state_vectors =
-            planet
-                .orbit
-                .state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
+        planet.state_vectors = planet.orbit.state_vectors_at_epoch(
+            state.star_mass,
+            state.epoch,
+            state.tolerance,
+        );
 
         let position = zup2yup(planet.state_vectors.position);
 
@@ -646,9 +710,13 @@ fn update_planets(mut query: Query<(&mut Transform, &mut Planet)>, state: Res<St
     }
 }
 
-fn update_star(mut query: Query<&mut Transform, With<Star>>, state: Res<State>) {
+fn update_star(
+    mut query: Query<&mut Transform, With<Star>>,
+    state: Res<State>,
+) {
     for mut transform in query.iter_mut() {
-        transform.scale = Vec3::ONE * mass2radius(state.as_ref(), state.star_mass);
+        transform.scale =
+            Vec3::ONE * mass2radius(state.as_ref(), state.star_mass);
     }
 }
 
@@ -692,7 +760,8 @@ fn draw_orbits(
         let color = materials.get(mat).unwrap().base_color;
 
         let first_position =
-            zup2yup(orbit.position_at_true_anomaly(state.star_mass, 0.0)) * state.distance_scaling;
+            zup2yup(orbit.position_at_true_anomaly(state.star_mass, 0.0))
+                * state.distance_scaling;
         let mut prev_position = first_position.clone();
 
         let step = (2.0 * PI) / state.orbit_subdivisions as f32;
@@ -714,8 +783,12 @@ fn draw_orbits(
         let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
 
         if state.show_position_and_velocity {
-            let StateVectors { position, velocity } =
-                orbit.state_vectors_at_epoch(state.star_mass, state.epoch, state.tolerance);
+            let StateVectors { position, velocity } = orbit
+                .state_vectors_at_epoch(
+                    state.star_mass,
+                    state.epoch,
+                    state.tolerance,
+                );
 
             let position = zup2yup(position);
             let velocity = zup2yup(velocity);
@@ -730,12 +803,14 @@ fn draw_orbits(
         if state.show_nodes {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.ascending_node(state.star_mass)) * state.distance_scaling,
+                zup2yup(orbit.ascending_node(state.star_mass))
+                    * state.distance_scaling,
                 Color::YELLOW_GREEN,
             );
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.descending_node(state.star_mass)) * state.distance_scaling,
+                zup2yup(orbit.descending_node(state.star_mass))
+                    * state.distance_scaling,
                 Color::YELLOW,
             );
         }
@@ -743,12 +818,14 @@ fn draw_orbits(
         if state.show_peri_and_apo_apsis {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.periapsis(state.star_mass)) * state.distance_scaling,
+                zup2yup(orbit.periapsis(state.star_mass))
+                    * state.distance_scaling,
                 Color::WHITE,
             );
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.apoapsis(state.star_mass)) * state.distance_scaling,
+                zup2yup(orbit.apoapsis(state.star_mass))
+                    * state.distance_scaling,
                 Color::WHITE,
             );
         }
@@ -772,10 +849,12 @@ fn draw_soi(
     for planet in planets.iter() {
         let r = planet.state_vectors.position.length();
 
-        let soi = keplerian_elements::astro::soi(r, planet.mass, state.star_mass)
-            * state.distance_scaling;
+        let soi =
+            keplerian_elements::astro::soi(r, planet.mass, state.star_mass)
+                * state.distance_scaling;
 
-        let pos = zup2yup(planet.state_vectors.position) * state.distance_scaling;
+        let pos =
+            zup2yup(planet.state_vectors.position) * state.distance_scaling;
 
         let to_camera = (camera_position - pos).normalize();
         let planet_camera_radial = to_camera.cross(pos).normalize();

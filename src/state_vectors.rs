@@ -14,7 +14,8 @@ impl StateVectors {
     }
 
     pub fn abs_diff(&self, other: &Self) -> Num {
-        self.position.distance(other.position) + self.velocity.distance(other.velocity)
+        self.position.distance(other.position)
+            + self.velocity.distance(other.velocity)
     }
 
     pub fn to_elements(&self, mass: Num, time: Num) -> KeplerianElements {
@@ -69,8 +70,20 @@ impl StateVectors {
         // Argument of periapsis
         let mut ω = (ev / e).dot(nv).acos();
 
-        if ev.z < 0.0 {
-            ω = TWO_PI - ω;
+        // An edge case for a zero inclination orbit
+        // If an orbit has zero inclination,
+        // the z component of the eccentricity vector
+        // is zero.
+        //
+        // But we can still do a quadrant check using the y component
+        if i.abs() < Num::EPSILON {
+            if ev.y < 0.0 {
+                ω = TWO_PI - ω;
+            }
+        } else {
+            if ev.z < 0.0 {
+                ω = TWO_PI - ω;
+            }
         }
 
         if e == 0.0 {
@@ -92,23 +105,6 @@ impl StateVectors {
             v = TWO_PI - v;
         }
 
-        // Hyperbolic mean anomaly calculation
-        fn calculate_hyperbolic_mean_anomaly(e: Num, v: Num) -> Num {
-            let term1 = (e * (e.powi(2) - 1.0).sqrt() * v.sin()) / (1.0 + e * v.cos());
-            let term2_numerator = (e + 1.0).sqrt() + (e - 1.0).sqrt() * (v / 2.0).tan();
-            let term2_denominator = (e + 1.0).sqrt() - (e - 1.0).sqrt() * (v / 2.0).tan();
-
-            term1 - (term2_numerator / term2_denominator).ln()
-        }
-
-        // Elliptical mean anomaly calculation
-        fn calculate_elliptical_mean_anomaly(e: Num, v: Num) -> Num {
-            let term1 = 2.0 * (((1.0 - e) / (1.0 + e)).sqrt() * (v / 2.0).tan()).atan();
-            let term2 = e * ((1.0 - e.powi(2)).sqrt() * v.sin() / (1.0 + e * v.cos()));
-
-            term1 - term2
-        }
-
         // Mean anomaly calculation
         let M = if is_hyperbolic {
             calculate_hyperbolic_mean_anomaly(e, v)
@@ -126,4 +122,22 @@ impl StateVectors {
             epoch: time,
         }
     }
+}
+
+// Hyperbolic mean anomaly calculation
+fn calculate_hyperbolic_mean_anomaly(e: Num, v: Num) -> Num {
+    let term1 = (e * (e.powi(2) - 1.0).sqrt() * v.sin()) / (1.0 + e * v.cos());
+    let term2_numerator = (e + 1.0).sqrt() + (e - 1.0).sqrt() * (v / 2.0).tan();
+    let term2_denominator =
+        (e + 1.0).sqrt() - (e - 1.0).sqrt() * (v / 2.0).tan();
+
+    term1 - (term2_numerator / term2_denominator).ln()
+}
+
+// Elliptical mean anomaly calculation
+fn calculate_elliptical_mean_anomaly(e: Num, v: Num) -> Num {
+    let term1 = 2.0 * (((1.0 - e) / (1.0 + e)).sqrt() * (v / 2.0).tan()).atan();
+    let term2 = e * ((1.0 - e.powi(2)).sqrt() * v.sin() / (1.0 + e * v.cos()));
+
+    term1 - term2
 }
