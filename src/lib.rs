@@ -18,7 +18,7 @@ pub mod math;
 pub mod state_vectors;
 pub mod utils;
 
-use constants::{G, PI, TWO_PI};
+use constants::{PI, TWO_PI};
 
 pub use self::elements::KeplerianElements;
 pub use self::state_vectors::StateVectors;
@@ -34,12 +34,17 @@ mod tests {
     const MAX_ABS_DIFF: Num = 0.0001;
     const TOLERANCE: Num = 0.0001;
 
-    fn test_back_and_forth_conversion(original: KeplerianElements, mass: Num, epoch: Num) {
+    fn test_back_and_forth_conversion(
+        original: KeplerianElements,
+        mass: Num,
+        epoch: Num,
+    ) {
         let sv = original.state_vectors_at_epoch(mass, epoch, TOLERANCE);
 
         let elements = KeplerianElements::from_state_vectors(&sv, mass, epoch);
 
-        let sv_converted = elements.state_vectors_at_epoch(mass, epoch, TOLERANCE);
+        let sv_converted =
+            elements.state_vectors_at_epoch(mass, epoch, TOLERANCE);
 
         let pos_diff = sv.position.distance(sv_converted.position);
         assert!(

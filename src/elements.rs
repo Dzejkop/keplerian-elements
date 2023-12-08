@@ -1,5 +1,5 @@
-use crate::math::newton_approx;
-use crate::{vec3, Mat3, Num, StateVectors, Vec3, G, PI, TWO_PI};
+use crate::astro::{self, standard_gravitational_parameter};
+use crate::{vec3, Mat3, Num, StateVectors, Vec3, PI, TWO_PI};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -22,13 +22,19 @@ impl KeplerianElements {
         diff += (self.right_ascension_of_the_ascending_node
             - other.right_ascension_of_the_ascending_node)
             .abs();
-        diff += (self.argument_of_periapsis - other.argument_of_periapsis).abs();
-        diff += (self.mean_anomaly_at_epoch - other.mean_anomaly_at_epoch).abs();
+        diff +=
+            (self.argument_of_periapsis - other.argument_of_periapsis).abs();
+        diff +=
+            (self.mean_anomaly_at_epoch - other.mean_anomaly_at_epoch).abs();
 
         diff
     }
 
-    pub fn from_state_vectors(state_vectors: &StateVectors, mass: Num, time: Num) -> Self {
+    pub fn from_state_vectors(
+        state_vectors: &StateVectors,
+        mass: Num,
+        time: Num,
+    ) -> Self {
         state_vectors.to_elements(mass, time)
     }
 
@@ -52,18 +58,13 @@ impl KeplerianElements {
         self.perifocal_to_equatorial(Vec3::Z)
     }
 
-    /// https://en.wikipedia.org/wiki/Standard_gravitational_parameter
-    pub fn standard_gravitational_parameter(mass: Num) -> Num {
-        G * mass
-    }
-
     /// https://en.wikipedia.org/wiki/Orbital_period
     pub fn period(&self, mass: Num) -> Num {
         Self::period_static(self.semi_major_axis, mass)
     }
 
     pub fn period_static(a: Num, mass: Num) -> Num {
-        TWO_PI * (a.powi(3) / Self::standard_gravitational_parameter(mass)).sqrt()
+        TWO_PI * (a.powi(3) / standard_gravitational_parameter(mass)).sqrt()
     }
 
     /// https://en.wikipedia.org/wiki/Mean_anomaly
@@ -73,15 +74,8 @@ impl KeplerianElements {
 
         let epoch_diff = epoch - self.epoch;
 
-        self.mean_anomaly_at_epoch + Self::mean_motion(h, e, mass) * epoch_diff
-    }
-
-    /// Mean motion
-    /// https://en.wikipedia.org/wiki/Mean_anomaly
-    pub fn mean_motion(h: Num, e: Num, mass: Num) -> Num {
-        let μ = Self::standard_gravitational_parameter(mass);
-
-        (μ.powi(2) / h.powi(3)) * (1.0 - e.powi(2)).powi(3).sqrt()
+        self.mean_anomaly_at_epoch
+            + astro::elliptic::mean_motion(h, e, mass) * epoch_diff
     }
 
     /// Hyperbolic mean anomaly
@@ -92,15 +86,8 @@ impl KeplerianElements {
 
         let epoch_diff = epoch - self.epoch;
 
-        self.mean_anomaly_at_epoch + Self::hyperbolic_mean_motion(h, e, mass) * epoch_diff
-    }
-
-    /// Hyperbolic mean motion
-    /// SRC: https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-hyperbolic-mean-anomaly
-    pub fn hyperbolic_mean_motion(h: Num, e: Num, mass: Num) -> Num {
-        let μ = Self::standard_gravitational_parameter(mass);
-
-        (μ.powi(2) / h.powi(3)) * (e.powi(2) - 1.0).powi(3).sqrt()
+        self.mean_anomaly_at_epoch
+            + astro::hyperbolic::mean_motion(h, e, mass) * epoch_diff
     }
 
     /// Eccentric Anomaly (E) is given by the equation:
@@ -110,18 +97,16 @@ impl KeplerianElements {
     /// e is the eccentricity
     ///
     /// https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/elliptical-orbits.html#equation-eq-keplers-equation-ellipse
-    pub fn estimate_eccentric_anomaly(&self, mass: Num, epoch: Num, tolerance: Num) -> Num {
+    pub fn estimate_eccentric_anomaly(
+        &self,
+        mass: Num,
+        epoch: Num,
+        tolerance: Num,
+    ) -> Num {
         let M = self.mean_anomaly(mass, epoch);
         let e = self.eccentricity;
 
-        newton_approx(
-            // f(E) = E - e*sin(E) - M
-            |E| E - (e * E.sin()) - M,
-            // f'(E) = 1 - e*cos(E)
-            |E| 1.0 - (e * E.cos()),
-            M,
-            tolerance,
-        )
+        astro::elliptic::estimate_anomaly(M, e, tolerance)
     }
 
     /// Hyperbolic Anomaly (F) is given by the equation:
@@ -131,21 +116,24 @@ impl KeplerianElements {
     /// e is the eccentricity
     ///
     /// https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-hyperbolic-keplers-equation
-    pub fn estimate_hyperbolic_anomaly(&self, mass: Num, epoch: Num, tolerance: Num) -> Num {
+    pub fn estimate_hyperbolic_anomaly(
+        &self,
+        mass: Num,
+        epoch: Num,
+        tolerance: Num,
+    ) -> Num {
         let M = self.hyperbolic_mean_anomaly(mass, epoch);
         let e = self.eccentricity;
 
-        newton_approx(
-            // f(F) = e * sinh(F) - F - M
-            |F| (e * F.sinh()) - F - M,
-            // f'(F) = e * cosh(F) - 1
-            |F| e * F.cosh() - 1.0,
-            M,
-            tolerance,
-        )
+        astro::hyperbolic::estimate_anomaly(M, e, tolerance)
     }
 
-    pub fn state_vectors_at_epoch(&self, mass: Num, epoch: Num, tolerance: Num) -> StateVectors {
+    pub fn state_vectors_at_epoch(
+        &self,
+        mass: Num,
+        epoch: Num,
+        tolerance: Num,
+    ) -> StateVectors {
         // Lowercase nu
         let v = self.true_anomaly_at_epoch(mass, epoch, tolerance);
 
@@ -159,7 +147,7 @@ impl KeplerianElements {
     pub fn position_at_true_anomaly(&self, mass: Num, v: Num) -> Vec3 {
         let e = self.eccentricity;
         let h = self.specific_angular_momentum(mass);
-        let μ = Self::standard_gravitational_parameter(mass);
+        let μ = standard_gravitational_parameter(mass);
 
         let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
 
@@ -176,7 +164,7 @@ impl KeplerianElements {
     pub fn velocity_at_true_anomaly(&self, mass: Num, v: Num) -> Vec3 {
         let e = self.eccentricity;
         let h = self.specific_angular_momentum(mass);
-        let μ = Self::standard_gravitational_parameter(mass);
+        let μ = standard_gravitational_parameter(mass);
 
         let vp = -(μ / h) * v.sin();
         let vq = (μ / h) * (e + v.cos());
@@ -200,7 +188,7 @@ impl KeplerianElements {
     }
 
     pub fn specific_angular_momentum(&self, mass: Num) -> Num {
-        let μ = Self::standard_gravitational_parameter(mass);
+        let μ = standard_gravitational_parameter(mass);
         let a = self.semi_major_axis;
         let e = self.eccentricity;
 
@@ -214,20 +202,20 @@ impl KeplerianElements {
     }
 
     /// Calculates true anomaly
-    pub fn true_anomaly_at_epoch(&self, mass: Num, epoch: Num, tolerance: Num) -> Num {
+    pub fn true_anomaly_at_epoch(
+        &self,
+        mass: Num,
+        epoch: Num,
+        tolerance: Num,
+    ) -> Num {
         let e = self.eccentricity;
 
         if self.is_hyperbolic() {
             let F = self.estimate_hyperbolic_anomaly(mass, epoch, tolerance);
-
-            // https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/hyperbolic-trajectories.html#equation-eq-eccentric-anomaly-true-anomaly-hyperbola
-            2.0 * ((F / 2.0).tanh() / ((e - 1.0) / (e + 1.0)).sqrt()).atan()
+            astro::hyperbolic::true_anomaly(F, e)
         } else {
             let E = self.estimate_eccentric_anomaly(mass, epoch, tolerance);
-
-            // Circular (practically unattainable), elliptic or parabolic (practically unattainable)
-            // https://orbital-mechanics.space/time-since-periapsis-and-keplers-equation/elliptical-orbits.html#equation-eq-eccentric-anomaly-true-anomaly-ellipse
-            2.0 * ((E / 2.0).tan() / ((1.0 - e) / (1.0 + e)).sqrt()).atan()
+            astro::elliptic::true_anomaly(E, e)
         }
     }
 
