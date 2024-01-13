@@ -135,9 +135,7 @@ fn ui(
                         let h =
                             orbit.specific_angular_momentum(state.star_mass);
                         let μ =
-                            standard_gravitational_parameter(
-                                state.star_mass,
-                            );
+                            standard_gravitational_parameter(state.star_mass);
 
                         let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
                         ui.label(format!("r: {r}"));

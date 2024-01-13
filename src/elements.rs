@@ -60,11 +60,7 @@ impl KeplerianElements {
 
     /// https://en.wikipedia.org/wiki/Orbital_period
     pub fn period(&self, mass: Num) -> Num {
-        Self::period_static(self.semi_major_axis, mass)
-    }
-
-    pub fn period_static(a: Num, mass: Num) -> Num {
-        TWO_PI * (a.powi(3) / standard_gravitational_parameter(mass)).sqrt()
+        astro::period(self.semi_major_axis, mass)
     }
 
     /// https://en.wikipedia.org/wiki/Mean_anomaly
