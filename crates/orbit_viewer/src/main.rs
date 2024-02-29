@@ -5,16 +5,17 @@ use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::egui::{ComboBox, DragValue, Ui};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use keplerian_elements::astro::standard_gravitational_parameter;
 use keplerian_elements::constants::AU;
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
-    OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
+    self, OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin
 };
 use smooth_bevy_cameras::{LookTransform, LookTransformPlugin};
 
 const USE_REAL_SOLAR_SYSTEM: bool = false;
+const BASE_TOLERANCE: f32 = 0.01;
+const STAR_MASS: f32 = 1.989e7;
 
 fn main() {
     App::new()
@@ -71,6 +72,27 @@ struct Planet {
     orbit: KeplerianElements,
     state_vectors: StateVectors,
     mass: f32,
+    last_update_epoch: f32,
+}
+
+impl Planet {
+    pub fn new_from_orbit(
+        orbit: KeplerianElements,
+        mass: f32,
+        central_mass: f32,
+        tolerance: f32,
+    ) -> Self {
+        Self {
+            orbit,
+            state_vectors: orbit.state_vectors_at_epoch(
+                central_mass,
+                0.0,
+                tolerance,
+            ),
+            mass,
+            last_update_epoch: 0.0,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -90,107 +112,35 @@ fn ui(
 
                     value_slider(ui, "Mass", &mut planet.mass);
 
-                    // --- Elements ---
-                    ui.collapsing("Orbital Elements", |ui| {
-                        let orbit = &mut planet.orbit;
-                        value_slider_min_max(
-                            ui,
-                            "Semi major axis",
-                            &mut orbit.semi_major_axis,
-                            f32::MIN,
-                            f32::MAX,
-                        );
-                        value_slider(
-                            ui,
-                            "Eccentricity",
-                            &mut orbit.eccentricity,
-                        );
-                        value_slider(ui, "Inclination", &mut orbit.inclination);
-                        value_slider(
-                            ui,
-                            "Longitude of ascending node",
-                            &mut orbit.right_ascension_of_the_ascending_node,
-                        );
-                        value_slider(
-                            ui,
-                            "Argument of periapsis",
-                            &mut orbit.argument_of_periapsis,
-                        );
-                        value_slider(
-                            ui,
-                            "Mean anomaly",
-                            &mut orbit.mean_anomaly_at_epoch,
-                        );
-                        value_slider(ui, "Epoch", &mut orbit.epoch);
-
-                        let v = orbit.true_anomaly_at_epoch(
-                            state.star_mass,
-                            state.epoch,
-                            state.tolerance,
-                        );
-                        ui.label("Readouts:");
-                        ui.label(format!("True anomaly: {v}",));
-
-                        let e = orbit.eccentricity;
-                        let h =
-                            orbit.specific_angular_momentum(state.star_mass);
-                        let μ =
-                            standard_gravitational_parameter(state.star_mass);
-
-                        let r = (h.powi(2) / μ) / (1.0 + e * v.cos());
-                        ui.label(format!("r: {r}"));
-
-                        let vmag = r / (1.0 + e * v.cos());
-                        ui.label(format!("vmag: {vmag}",));
-
-                        let vp = (v.cos() + e) * vmag;
-                        let vq = -v.sin() * vmag;
-
-                        ui.label(format!("vp: {vp}",));
-                        ui.label(format!("vq: {vq}",));
-
-                        planet.state_vectors =
-                            planet.orbit.state_vectors_at_epoch(
-                                state.star_mass,
-                                state.epoch,
-                                state.tolerance,
-                            );
-                    });
-
                     // --- State Vectors ---
-                    ui.collapsing("State Vectors", |ui| {
-                        let sv = &mut planet.state_vectors;
-                        ui.label("Position");
+                    let sv = &mut planet.state_vectors;
+                    ui.label("Position");
 
-                        let mut p =
-                            zup2yup(sv.position * state.distance_scaling);
+                    let mut p = zup2yup(sv.position * state.distance_scaling);
 
-                        value_slider(ui, "X", &mut p.x);
-                        value_slider(ui, "Y", &mut p.y);
-                        value_slider(ui, "Z", &mut p.z);
+                    value_slider(ui, "X", &mut p.x);
+                    value_slider(ui, "Y", &mut p.y);
+                    value_slider(ui, "Z", &mut p.z);
 
-                        sv.position = yup2zup(p / state.distance_scaling);
+                    sv.position = yup2zup(p / state.distance_scaling);
 
-                        ui.label("Velocity");
+                    ui.label("Velocity");
 
-                        let mut v = zup2yup(
-                            sv.velocity
-                                * state.distance_scaling
-                                * state.velocity_scaling,
-                        );
+                    let mut v = zup2yup(
+                        sv.velocity
+                            * state.distance_scaling
+                            * state.velocity_scaling,
+                    );
 
-                        value_slider(ui, "Vx", &mut v.x);
-                        value_slider(ui, "Vy", &mut v.y);
-                        value_slider(ui, "Vz", &mut v.z);
+                    value_slider(ui, "Vx", &mut v.x);
+                    value_slider(ui, "Vy", &mut v.y);
+                    value_slider(ui, "Vz", &mut v.z);
 
-                        sv.velocity = yup2zup(
-                            v / (state.distance_scaling
-                                * state.velocity_scaling),
-                        );
+                    sv.velocity = yup2zup(
+                        v / (state.distance_scaling * state.velocity_scaling),
+                    );
 
-                        planet.orbit =
-                            sv.to_elements(state.star_mass, state.epoch);
-                    });
+                    // planet.orbit = sv.to_elements(state.star_mass, state.epoch);
                 });
             }
         });
@@ -382,9 +332,9 @@ fn setup(
     });
 
     commands.insert_resource(State {
-        tolerance: 0.01,
+        tolerance: BASE_TOLERANCE,
         // Sun Mass
-        star_mass: 1.989e7,
+        star_mass: STAR_MASS,
         epoch: 0.0,
         epoch_scale: 1000.0,
         update_epoch: true,
@@ -480,8 +430,8 @@ fn spawn_test_system(
             material: planet_material(Color::BEIGE),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 semi_major_axis: 0.38709927 * AU,
                 eccentricity: 0.20563593,
                 inclination: 0.12,
@@ -490,9 +440,10 @@ fn spawn_test_system(
                 mean_anomaly_at_epoch: 4.40,
                 epoch: 0.0, // Example epoch year
             },
-            state_vectors: StateVectors::default(),
-            mass: 3.285,
-        })
+            3.285,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Test Planet"));
 }
 
@@ -528,6 +479,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 3.285,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Mercury"));
 
@@ -549,6 +501,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 4.867e1,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Venus"));
 
@@ -570,6 +523,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 5.972e1,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Earth"));
 
@@ -592,6 +546,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 0.642,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Mars"));
 
@@ -614,6 +569,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 1.898e4,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Jupiter"));
 
@@ -636,6 +592,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 5.683e3,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Saturn"));
 
@@ -658,6 +615,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 8.681e2,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Uranus"));
 
@@ -680,6 +638,7 @@ fn spawn_solar_system(
             },
             state_vectors: StateVectors::default(),
             mass: 1.024e3,
+            last_update_epoch: 0.0,
         })
         .insert(Name::new("Neptune"));
 }
@@ -695,11 +654,14 @@ fn update_planets(
     state: Res<State>,
 ) {
     for (mut transform, mut planet) in query.iter_mut() {
-        planet.state_vectors = planet.orbit.state_vectors_at_epoch(
+        let dt = state.epoch - planet.last_update_epoch;
+
+        planet.state_vectors = planet.state_vectors.propagate_kepler(
+            dt,
             state.star_mass,
-            state.epoch,
             state.tolerance,
         );
+        planet.last_update_epoch = state.epoch;
 
         let position = zup2yup(planet.state_vectors.position);
 
@@ -754,26 +716,53 @@ fn draw_orbits(
     let camera_position = camera.translation();
 
     for (planet, mat) in planets.iter() {
-        let orbit = &planet.orbit;
         let color = materials.get(mat).unwrap().base_color;
 
         let first_position =
-            zup2yup(orbit.position_at_true_anomaly(state.star_mass, 0.0))
-                * state.distance_scaling;
+            zup2yup(planet.state_vectors.position) * state.distance_scaling;
         let mut prev_position = first_position.clone();
 
-        let step = (2.0 * PI) / state.orbit_subdivisions as f32;
+        let period = planet.state_vectors.period(state.star_mass);
+        let step = period / state.orbit_subdivisions as f32;
 
-        for i in 0..state.orbit_subdivisions {
-            let t = i as f32 * step;
+        let orbit_positions = (0..state.orbit_subdivisions)
+            .map(|i| {
+                let dt = i as f32 * step;
 
-            let position = orbit.position_at_true_anomaly(state.star_mass, t);
-            let position = zup2yup(position) * state.distance_scaling;
+                let StateVectors { position, .. } =
+                    planet.state_vectors.propagate_kepler(
+                        dt,
+                        state.star_mass,
+                        state.tolerance,
+                    );
+
+                position
+            })
+            .collect::<Vec<_>>();
+
+        for pos in orbit_positions {
+            let position = zup2yup(pos) * state.distance_scaling;
 
             lines.line(prev_position, position, color);
 
             prev_position = position;
         }
+
+        // for i in 0..state.orbit_subdivisions {
+        //     let dt = i as f32 * step;
+
+        //     let StateVectors { position, .. } =
+        //         planet.state_vectors.propagate_kepler(
+        //             dt,
+        //             state.star_mass,
+        //             state.tolerance,
+        //         );
+        //     let position = zup2yup(position) * state.distance_scaling;
+
+        //     lines.line(prev_position, position, color);
+
+        //     prev_position = position;
+        // }
 
         // Close the loop
         lines.line(prev_position, first_position, color);
@@ -781,12 +770,7 @@ fn draw_orbits(
         let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
 
         if state.show_position_and_velocity {
-            let StateVectors { position, velocity } = orbit
-                .state_vectors_at_epoch(
-                    state.star_mass,
-                    state.epoch,
-                    state.tolerance,
-                );
+            let StateVectors { position, velocity } = planet.state_vectors;
 
             let position = zup2yup(position);
             let velocity = zup2yup(velocity);
@@ -798,6 +782,7 @@ fn draw_orbits(
             debug_arrows.draw_arrow(p, p + v, Color::RED);
         }
 
+        let orbit = planet.orbit;
         if state.show_nodes {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,

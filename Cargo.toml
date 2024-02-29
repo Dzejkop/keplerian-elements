@@ -8,14 +8,14 @@ description = "A library for working with orbits and keplerian elements"
 readme = "README.md"
 license = "MIT"
 
+[workspace]
+members = [ "crates/orbit_viewer" ]
+
 [dependencies]
 glam = "0.24.2"
 serde ={ version = "1.0", optional = true }
 
 [dev-dependencies]
-bevy = "0.12.1"
-smooth-bevy-cameras = "0.10"
-bevy_egui = "0.23"
 test-case = "3.3.1"
 
 [features]

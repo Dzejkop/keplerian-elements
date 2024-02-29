@@ -1,5 +1,5 @@
 use crate::astro::{self, standard_gravitational_parameter};
-use crate::{vec3, Mat3, Num, StateVectors, Vec3, PI, TWO_PI};
+use crate::{vec3, Mat3, Num, StateVectors, Vec3, PI};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
