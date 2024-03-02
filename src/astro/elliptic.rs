@@ -1,7 +1,6 @@
+use super::standard_gravitational_parameter;
 use crate::math::newton_approx;
 use crate::Num;
-
-use super::standard_gravitational_parameter;
 
 /// Eccentric Anomaly (E) is given by the equation:
 /// M = E - e * sin(E)

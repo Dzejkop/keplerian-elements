@@ -9,7 +9,7 @@ use keplerian_elements::constants::AU;
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
-    self, OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin
+    self, OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::{LookTransform, LookTransformPlugin};
 
@@ -729,12 +729,9 @@ fn draw_orbits(
             .map(|i| {
                 let dt = i as f32 * step;
 
-                let StateVectors { position, .. } =
-                    planet.state_vectors.propagate_kepler(
-                        dt,
-                        state.star_mass,
-                        state.tolerance,
-                    );
+                let StateVectors { position, .. } = planet
+                    .state_vectors
+                    .propagate_kepler(dt, state.star_mass, state.tolerance);
 
                 position
             })

@@ -189,17 +189,14 @@ impl StateVectors {
             c3 = result.1;
 
             r = x * x * c2
-                + self.position.dot(self.velocity) / (μ).sqrt()
+                + self.position.dot(self.velocity) / μ.sqrt()
                     * x
                     * (1.0 - ψ * c3)
                 + r0 * (1.0 - ψ * c2);
             let new_x = x
-                + ((μ).sqrt() * dt
+                + (μ.sqrt() * dt
                     - x * x * x * c3
-                    - self.position.dot(self.velocity) / (μ).sqrt()
-                        * x
-                        * x
-                        * c2
+                    - self.position.dot(self.velocity) / μ.sqrt() * x * x * c2
                     - r0 * x * (1.0 - ψ * c3))
                     / r;
 
@@ -254,13 +251,13 @@ fn find_c2c3(ψ: Num, tolerance: Num) -> (Num, Num) {
         let sqrt_ψ = ψ.sqrt();
         (
             (1.0 - sqrt_ψ.cos()) / ψ,
-            (sqrt_ψ - sqrt_ψ.sin()) / ψ.powi(3),
+            (sqrt_ψ - sqrt_ψ.sin()) / ψ.powi(3).sqrt(),
         )
     } else if ψ < -tolerance {
         let sqrt_ψ = (-ψ).sqrt();
         (
             (1.0 - sqrt_ψ.cosh()) / ψ,
-            (sqrt_ψ.sinh() - sqrt_ψ) / (-ψ).powi(3),
+            (sqrt_ψ.sinh() - sqrt_ψ) / (-ψ).powi(3).sqrt(),
         )
     } else {
         (0.5, 1.0 / 6.0)
