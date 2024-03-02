@@ -11,7 +11,7 @@ use smooth_bevy_cameras::LookTransformPlugin;
 
 const USE_REAL_SOLAR_SYSTEM: bool = true;
 const BASE_TOLERANCE: f32 = 0.01;
-const STAR_MASS: f32 = 1.989e7;
+const STAR_MASS: f32 = 1.989e20;
 
 mod debug_arrows;
 mod draw;
@@ -125,9 +125,9 @@ fn setup(
         show_position_and_velocity: false,
         draw_soi: true,
         draw_axis: true,
-        axis_scale: 1000.0,
+        axis_scale: 10000.0,
         distance_scaling: 1e-6,
-        velocity_scaling: 10000000000000.0,
+        velocity_scaling: 100000.0,
         focus_mode: FocusMode::Sun,
     });
 

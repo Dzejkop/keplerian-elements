@@ -6,54 +6,116 @@ use smooth_bevy_cameras::controllers::orbit::OrbitCameraController;
 
 use super::{FocusMode, Planet, State};
 
+#[derive(Debug, Clone, Default)]
+pub struct UiState {
+    selected_planet: Option<usize>,
+    settings_visible: bool,
+    about_visible: bool,
+    focus_visible: bool,
+}
+
 pub fn render(
+    mut ui_state: Local<UiState>,
     mut egui_context: EguiContexts,
     mut state: ResMut<State>,
     mut planets: Query<(&mut Planet, &Name)>,
     mut camera: Query<&mut OrbitCameraController>,
+    camera_transform: Query<&GlobalTransform, With<OrbitCameraController>>,
 ) {
-    egui::Window::new("Settings").show(egui_context.ctx_mut(), |ui| {
-        ui.collapsing("Orbits", |ui| {
-            for (mut planet, name) in planets.iter_mut() {
-                ui.collapsing(name.as_str(), |ui| {
-                    ui.label(name.to_string());
+    let ctx = egui_context.ctx_mut();
 
-                    value_slider(ui, "Mass", &mut planet.mass);
+    egui::TopBottomPanel::top("Top").show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            if ui.button("Settings").clicked() {
+                ui_state.settings_visible = !ui_state.settings_visible;
+            }
 
-                    // --- State Vectors ---
-                    let sv = &mut planet.state_vectors;
-                    ui.label("Position");
+            if ui.button("About").clicked() {
+                ui_state.about_visible = !ui_state.about_visible;
+            }
 
-                    let mut p = zup2yup(sv.position * state.distance_scaling);
-
-                    value_slider(ui, "X", &mut p.x);
-                    value_slider(ui, "Y", &mut p.y);
-                    value_slider(ui, "Z", &mut p.z);
-
-                    sv.position = yup2zup(p / state.distance_scaling);
-
-                    ui.label("Velocity");
-
-                    let mut v = zup2yup(
-                        sv.velocity
-                            * state.distance_scaling
-                            * state.velocity_scaling,
-                    );
-
-                    value_slider(ui, "Vx", &mut v.x);
-                    value_slider(ui, "Vy", &mut v.y);
-                    value_slider(ui, "Vz", &mut v.z);
-
-                    sv.velocity = yup2zup(
-                        v / (state.distance_scaling * state.velocity_scaling),
-                    );
-
-                    // planet.orbit = sv.to_elements(state.star_mass, state.epoch);
-                });
+            if ui.button("Focus").clicked() {
+                ui_state.focus_visible = !ui_state.focus_visible;
             }
         });
+    });
 
-        ui.collapsing("State", |ui| {
+    egui::TopBottomPanel::bottom("Bototm").show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            if let Ok(camera_transform) = camera_transform.get_single() {
+                let translation = camera_transform.translation();
+                ui.label(format!("Camera Position: {translation}"));
+            }
+
+            let epoch_seconds = state.epoch;
+            let (y, m, d) = epoch_years_months_days(epoch_seconds as f64);
+
+            ui.label(format!("Epoch: {y:.0}Y {m:.0}M {d:.0}D"));
+        });
+    });
+
+    egui::SidePanel::left("Left").show(ctx, |ui| {
+        ui.heading("Planets:");
+        for (idx, (_planet, name)) in planets.iter().enumerate() {
+            let selected = ui_state.selected_planet == Some(idx);
+
+            if ui.selectable_label(selected, name.as_str()).clicked() {
+                if ui_state.selected_planet == Some(idx) {
+                    ui_state.selected_planet = None;
+                } else {
+                    ui_state.selected_planet = Some(idx);
+                }
+            }
+        }
+
+        ui.separator();
+
+        if let Some(selected_idx) = ui_state.selected_planet {
+            let (_idx, (mut planet, name)) = planets
+                .iter_mut()
+                .enumerate()
+                .find(|(idx, _)| *idx == selected_idx)
+                .unwrap();
+
+            ui.heading(name.to_string());
+
+            value_slider(ui, "Mass", &mut planet.mass);
+
+            // --- State Vectors ---
+            let sv = &mut planet.state_vectors;
+            ui.label("Position");
+
+            let mut p = zup2yup(sv.position * state.distance_scaling);
+
+            value_slider(ui, "X", &mut p.x);
+            value_slider(ui, "Y", &mut p.y);
+            value_slider(ui, "Z", &mut p.z);
+
+            sv.position = yup2zup(p / state.distance_scaling);
+
+            ui.label("Velocity");
+
+            let mut v = zup2yup(
+                sv.velocity * state.distance_scaling * state.velocity_scaling,
+            );
+
+            value_slider(ui, "Vx", &mut v.x);
+            value_slider(ui, "Vy", &mut v.y);
+            value_slider(ui, "Vz", &mut v.z);
+
+            sv.velocity =
+                yup2zup(v / (state.distance_scaling * state.velocity_scaling));
+
+            if ui.button("Focus").clicked() {
+                state.focus_mode = FocusMode::Planet(name.to_string());
+            }
+        }
+    });
+
+    egui::Window::new("Settings")
+        .open(&mut ui_state.settings_visible)
+        .show(ctx, |ui| {
+            ui.heading("State");
             value_slider_min_max(
                 ui,
                 "Tolerance",
@@ -103,10 +165,10 @@ pub fn render(
             );
 
             value_slider(ui, "Velocity scaling", &mut state.velocity_scaling);
-        });
 
-        if let Ok(mut camera) = camera.get_single_mut() {
-            ui.collapsing("Camera", |ui| {
+            if let Ok(mut camera) = camera.get_single_mut() {
+                ui.heading("Camera");
+
                 ui.label("Mouse rotate sensitivity");
                 ui.horizontal(|ui| {
                     ui.label("x");
@@ -138,11 +200,10 @@ pub fn render(
                         .speed(0.01),
                     );
                 });
-            });
-        }
-    });
+            }
+        });
 
-    egui::Window::new("About").show(egui_context.ctx_mut(), |ui| {
+    egui::Window::new("About").open(&mut ui_state.about_visible).show(ctx, |ui| {
         ui.heading("Hello!");
 
         ui.label("This is a basic orbital simulation of the solar system.");
@@ -157,35 +218,38 @@ pub fn render(
         ui.label("Use the focus window to focus on a different celestial object");
     });
 
-    egui::Window::new("Focus").show(egui_context.ctx_mut(), |ui| {
-        let current = match &state.focus_mode {
-            FocusMode::Sun => "Sun".to_string(),
-            FocusMode::Planet(planet) => planet.clone(),
-        };
+    egui::Window::new("Focus")
+        .open(&mut ui_state.focus_visible)
+        .show(ctx, |ui| {
+            let current = match &state.focus_mode {
+                FocusMode::Sun => "Sun".to_string(),
+                FocusMode::Planet(planet) => planet.clone(),
+            };
 
-        ComboBox::from_label("Choose focus")
-            .selected_text(&current)
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(current == "Sun".to_string(), "Sun")
-                    .clicked()
-                {
-                    state.focus_mode = FocusMode::Sun;
-                }
-
-                for (_, name) in &planets {
+            ComboBox::from_label("Choose focus")
+                .selected_text(&current)
+                .show_ui(ui, |ui| {
                     if ui
-                        .selectable_label(
-                            current == name.to_string(),
-                            &name.to_string(),
-                        )
+                        .selectable_label(current == "Sun".to_string(), "Sun")
                         .clicked()
                     {
-                        state.focus_mode = FocusMode::Planet(name.to_string());
+                        state.focus_mode = FocusMode::Sun;
                     }
-                }
-            });
-    });
+
+                    for (_, name) in &planets {
+                        if ui
+                            .selectable_label(
+                                current == name.to_string(),
+                                &name.to_string(),
+                            )
+                            .clicked()
+                        {
+                            state.focus_mode =
+                                FocusMode::Planet(name.to_string());
+                        }
+                    }
+                });
+        });
 }
 
 fn value_slider(ui: &mut Ui, name: &str, value: &mut f32) {
@@ -225,4 +289,16 @@ fn value_slider_u32(ui: &mut Ui, name: &str, value: &mut u32) {
                 .clamp_range(u32::MIN..=u32::MAX),
         );
     });
+}
+
+fn epoch_years_months_days(epoch_seconds: f64) -> (u32, u32, u32) {
+    const SECONDS_IN_YEAR: f64 = 365.0 * 24.0 * 60.0 * 60.0;
+    const SECONDS_IN_MONTH: f64 = 30.0 * 24.0 * 60.0 * 60.0;
+    const SECONDS_IN_DAY: f64 = 24.0 * 60.0 * 60.0;
+
+    let years = (epoch_seconds / SECONDS_IN_YEAR) as u32;
+    let months = ((epoch_seconds % SECONDS_IN_YEAR) / SECONDS_IN_MONTH) as u32;
+    let days = ((epoch_seconds % SECONDS_IN_MONTH) / SECONDS_IN_DAY) as u32;
+
+    (years, months, days)
 }
