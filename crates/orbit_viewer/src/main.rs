@@ -1,21 +1,22 @@
-use std::f32::consts::PI;
-
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
-use bevy_egui::egui::{ComboBox, DragValue, Ui};
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_egui::EguiPlugin;
 use keplerian_elements::constants::AU;
-use keplerian_elements::utils::{yup2zup, zup2yup};
 use keplerian_elements::{KeplerianElements, StateVectors};
 use smooth_bevy_cameras::controllers::orbit::{
-    self, OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
+    OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
-use smooth_bevy_cameras::{LookTransform, LookTransformPlugin};
+use smooth_bevy_cameras::LookTransformPlugin;
 
-const USE_REAL_SOLAR_SYSTEM: bool = false;
+const USE_REAL_SOLAR_SYSTEM: bool = true;
 const BASE_TOLERANCE: f32 = 0.01;
 const STAR_MASS: f32 = 1.989e7;
+
+mod debug_arrows;
+mod draw;
+mod ui;
+mod update;
 
 fn main() {
     App::new()
@@ -24,14 +25,14 @@ fn main() {
         .add_plugins(OrbitCameraPlugin::new(false))
         .add_plugins(EguiPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, ui)
-        .add_systems(Update, update_epoch)
-        .add_systems(Update, draw_orbits)
-        .add_systems(Update, update_planets)
-        .add_systems(Update, update_star)
-        .add_systems(Update, draw_axis)
-        .add_systems(Update, draw_soi)
-        .add_systems(Update, update_camera_focus)
+        .add_systems(Update, ui::render)
+        .add_systems(Update, update::epoch)
+        .add_systems(Update, update::planets)
+        .add_systems(Update, update::star)
+        .add_systems(Update, update::camera_focus)
+        .add_systems(Update, draw::orbits)
+        .add_systems(Update, draw::axis)
+        .add_systems(Update, draw::soi)
         .run();
 }
 
@@ -97,227 +98,6 @@ impl Planet {
 
 #[derive(Component)]
 struct Star;
-
-fn ui(
-    mut egui_context: EguiContexts,
-    mut state: ResMut<State>,
-    mut planets: Query<(&mut Planet, &Name)>,
-    mut camera: Query<&mut OrbitCameraController>,
-) {
-    egui::Window::new("Settings").show(egui_context.ctx_mut(), |ui| {
-        ui.collapsing("Orbits", |ui| {
-            for (mut planet, name) in planets.iter_mut() {
-                ui.collapsing(name.as_str(), |ui| {
-                    ui.label(name.to_string());
-
-                    value_slider(ui, "Mass", &mut planet.mass);
-
-                    // --- State Vectors ---
-                    let sv = &mut planet.state_vectors;
-                    ui.label("Position");
-
-                    let mut p = zup2yup(sv.position * state.distance_scaling);
-
-                    value_slider(ui, "X", &mut p.x);
-                    value_slider(ui, "Y", &mut p.y);
-                    value_slider(ui, "Z", &mut p.z);
-
-                    sv.position = yup2zup(p / state.distance_scaling);
-
-                    ui.label("Velocity");
-
-                    let mut v = zup2yup(
-                        sv.velocity
-                            * state.distance_scaling
-                            * state.velocity_scaling,
-                    );
-
-                    value_slider(ui, "Vx", &mut v.x);
-                    value_slider(ui, "Vy", &mut v.y);
-                    value_slider(ui, "Vz", &mut v.z);
-
-                    sv.velocity = yup2zup(
-                        v / (state.distance_scaling * state.velocity_scaling),
-                    );
-
-                    // planet.orbit = sv.to_elements(state.star_mass, state.epoch);
-                });
-            }
-        });
-
-        ui.collapsing("State", |ui| {
-            value_slider_min_max(
-                ui,
-                "Tolerance",
-                &mut state.tolerance,
-                f32::EPSILON,
-                100.0,
-            );
-            value_slider(ui, "Mass", &mut state.star_mass);
-            value_slider(ui, "Epoch", &mut state.epoch);
-            value_slider(ui, "Epoch scale", &mut state.epoch_scale);
-            ui.checkbox(&mut state.update_epoch, "Update Epoch");
-
-            ui.checkbox(&mut state.draw_orbits, "Draw orbits");
-            if state.draw_orbits {
-                ui.checkbox(&mut state.show_nodes, "Show nodes");
-                ui.checkbox(
-                    &mut state.show_peri_and_apo_apsis,
-                    "Show peri and apo apsis",
-                );
-
-                ui.checkbox(
-                    &mut state.show_position_and_velocity,
-                    "Show position & velocity",
-                );
-
-                value_slider_u32(
-                    ui,
-                    "Orbit subdivisions",
-                    &mut state.orbit_subdivisions,
-                );
-            }
-
-            ui.checkbox(&mut state.draw_soi, "Draw SOI");
-
-            ui.checkbox(&mut state.draw_axis, "Draw axis");
-            if state.draw_axis {
-                value_slider(ui, "Axis scale", &mut state.axis_scale);
-            }
-
-            value_slider_min_max_with_speed(
-                ui,
-                "Distance scaling",
-                &mut state.distance_scaling,
-                0.000001,
-                1.0,
-                0.0000001,
-            );
-
-            value_slider(ui, "Velocity scaling", &mut state.velocity_scaling);
-        });
-
-        if let Ok(mut camera) = camera.get_single_mut() {
-            ui.collapsing("Camera", |ui| {
-                ui.label("Mouse rotate sensitivity");
-                ui.horizontal(|ui| {
-                    ui.label("x");
-                    ui.add(
-                        DragValue::new(&mut camera.mouse_rotate_sensitivity.x)
-                            .speed(0.01),
-                    );
-                    ui.label("y");
-                    ui.add(
-                        DragValue::new(&mut camera.mouse_rotate_sensitivity.y)
-                            .speed(0.01),
-                    );
-                });
-
-                ui.label("Mouse translate sensitivity");
-                ui.horizontal(|ui| {
-                    ui.label("x");
-                    ui.add(
-                        DragValue::new(
-                            &mut camera.mouse_translate_sensitivity.x,
-                        )
-                        .speed(0.01),
-                    );
-                    ui.label("y");
-                    ui.add(
-                        DragValue::new(
-                            &mut camera.mouse_translate_sensitivity.y,
-                        )
-                        .speed(0.01),
-                    );
-                });
-            });
-        }
-    });
-
-    egui::Window::new("About").show(egui_context.ctx_mut(), |ui| {
-        ui.heading("Hello!");
-
-        ui.label("This is a basic orbital simulation of the solar system.");
-
-        ui.label("Everything is **mostly** to scale. I've also tried to replicate the orbital elements of each planet as closely as I could");
-
-        ui.heading("Controls");
-        ui.label("Scroll to zoom in & out");
-        ui.label("Hold Ctrl and drag the mouse to rotate the viewport");
-        ui.label("You can use the right click and drag, but it's not very efficient");
-
-        ui.label("Use the focus window to focus on a different celestial object");
-    });
-
-    egui::Window::new("Focus").show(egui_context.ctx_mut(), |ui| {
-        let current = match &state.focus_mode {
-            FocusMode::Sun => "Sun".to_string(),
-            FocusMode::Planet(planet) => planet.clone(),
-        };
-
-        ComboBox::from_label("Choose focus")
-            .selected_text(&current)
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(current == "Sun".to_string(), "Sun")
-                    .clicked()
-                {
-                    state.focus_mode = FocusMode::Sun;
-                }
-
-                for (_, name) in &planets {
-                    if ui
-                        .selectable_label(
-                            current == name.to_string(),
-                            &name.to_string(),
-                        )
-                        .clicked()
-                    {
-                        state.focus_mode = FocusMode::Planet(name.to_string());
-                    }
-                }
-            });
-    });
-}
-
-fn value_slider(ui: &mut Ui, name: &str, value: &mut f32) {
-    value_slider_min_max(ui, name, value, f32::MIN, f32::MAX)
-}
-
-fn value_slider_min_max(
-    ui: &mut Ui,
-    name: &str,
-    value: &mut f32,
-    min: f32,
-    max: f32,
-) {
-    value_slider_min_max_with_speed(ui, name, value, min, max, 0.01);
-}
-
-fn value_slider_min_max_with_speed(
-    ui: &mut Ui,
-    name: &str,
-    value: &mut f32,
-    min: f32,
-    max: f32,
-    speed: f32,
-) {
-    ui.horizontal(|ui| {
-        ui.label(name);
-        ui.add(DragValue::new(value).speed(speed).clamp_range(min..=max));
-    });
-}
-
-fn value_slider_u32(ui: &mut Ui, name: &str, value: &mut u32) {
-    ui.horizontal(|ui| {
-        ui.label(name);
-        ui.add(
-            DragValue::new(value)
-                .speed(1)
-                .clamp_range(u32::MIN..=u32::MAX),
-        );
-    });
-}
 
 fn setup(
     mut commands: Commands,
@@ -467,8 +247,8 @@ fn spawn_solar_system(
             material: planet_material(Color::BEIGE),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 semi_major_axis: 0.38709927 * AU,
                 eccentricity: 0.20563593,
                 inclination: 0.12,
@@ -477,10 +257,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 4.40,
                 epoch: 0.0, // Example epoch year
             },
-            state_vectors: StateVectors::default(),
-            mass: 3.285,
-            last_update_epoch: 0.0,
-        })
+            3.285,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Mercury"));
 
     commands
@@ -489,8 +269,8 @@ fn spawn_solar_system(
             material: planet_material(Color::ORANGE),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 semi_major_axis: 0.7233 * AU,
                 eccentricity: 0.00676,
                 inclination: 0.0593,
@@ -499,10 +279,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 3.17,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 4.867e1,
-            last_update_epoch: 0.0,
-        })
+            4.867e1,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Venus"));
 
     commands
@@ -511,8 +291,8 @@ fn spawn_solar_system(
             material: planet_material(Color::BLUE),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 eccentricity: 0.01673,
                 semi_major_axis: 1.0000 * AU,
                 inclination: 0.01,
@@ -521,10 +301,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 0.0,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 5.972e1,
-            last_update_epoch: 0.0,
-        })
+            5.972e1,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Earth"));
 
     commands
@@ -533,8 +313,8 @@ fn spawn_solar_system(
             material: planet_material(Color::RED),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 eccentricity: 0.09339410,
                 semi_major_axis: 1.52371034 * AU,
                 inclination: 0.03232349774693498376462675303241,
@@ -544,10 +324,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 6.2034237603634456152598740984391,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 0.642,
-            last_update_epoch: 0.0,
-        })
+            0.642,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Mars"));
 
     commands
@@ -556,8 +336,8 @@ fn spawn_solar_system(
             material: planet_material(Color::GREEN),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 eccentricity: 0.04854,
                 semi_major_axis: 5.2025 * AU,
                 inclination: 0.02267182698340634120423874308267,
@@ -567,10 +347,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 1.898e4,
-            last_update_epoch: 0.0,
-        })
+            1.898e4,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Jupiter"));
 
     commands
@@ -579,8 +359,8 @@ fn spawn_solar_system(
             material: planet_material(Color::YELLOW_GREEN),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 eccentricity: 0.05551,
                 semi_major_axis: 9.5415 * AU,
                 inclination: 0.04352851154473857964847684776611,
@@ -590,10 +370,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 0.8740608893987602521233843368591,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 5.683e3,
-            last_update_epoch: 0.0,
-        })
+            5.683e3,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Saturn"));
 
     commands
@@ -602,8 +382,8 @@ fn spawn_solar_system(
             material: planet_material(Color::ALICE_BLUE),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 eccentricity: 0.04686,
                 semi_major_axis: 19.188 * AU,
                 inclination: 0.01349139511791616762962012964042,
@@ -613,10 +393,10 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 5.4838245097661835306942363945912,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 8.681e2,
-            last_update_epoch: 0.0,
-        })
+            8.681e2,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Uranus"));
 
     commands
@@ -625,8 +405,8 @@ fn spawn_solar_system(
             material: planet_material(Color::MIDNIGHT_BLUE),
             ..Default::default()
         })
-        .insert(Planet {
-            orbit: KeplerianElements {
+        .insert(Planet::new_from_orbit(
+            KeplerianElements {
                 eccentricity: 0.00895,
                 semi_major_axis: 30.070 * AU,
                 inclination: 0.03089232776029963351154932660225,
@@ -636,291 +416,11 @@ fn spawn_solar_system(
                 mean_anomaly_at_epoch: 5.3096406504171494389172520558961,
                 epoch: 0.0,
             },
-            state_vectors: StateVectors::default(),
-            mass: 1.024e3,
-            last_update_epoch: 0.0,
-        })
+            1.024e3,
+            STAR_MASS,
+            BASE_TOLERANCE,
+        ))
         .insert(Name::new("Neptune"));
-}
-
-fn update_epoch(time: Res<Time>, mut state: ResMut<State>) {
-    if state.update_epoch {
-        state.epoch += state.epoch_scale * time.delta_seconds();
-    }
-}
-
-fn update_planets(
-    mut query: Query<(&mut Transform, &mut Planet)>,
-    state: Res<State>,
-) {
-    for (mut transform, mut planet) in query.iter_mut() {
-        let dt = state.epoch - planet.last_update_epoch;
-
-        planet.state_vectors = planet.state_vectors.propagate_kepler(
-            dt,
-            state.star_mass,
-            state.tolerance,
-        );
-        planet.last_update_epoch = state.epoch;
-
-        let position = zup2yup(planet.state_vectors.position);
-
-        transform.translation = position * state.distance_scaling;
-        transform.scale = Vec3::ONE * mass2radius(state.as_ref(), planet.mass);
-    }
-}
-
-fn update_star(
-    mut query: Query<&mut Transform, With<Star>>,
-    state: Res<State>,
-) {
-    for mut transform in query.iter_mut() {
-        transform.scale =
-            Vec3::ONE * mass2radius(state.as_ref(), state.star_mass);
-    }
-}
-
-fn update_camera_focus(
-    mut look_transform: Query<&mut LookTransform>,
-    state: Res<State>,
-    planets: Query<(&GlobalTransform, &Name), With<Planet>>,
-) {
-    let mut look = look_transform.single_mut();
-
-    match &state.focus_mode {
-        FocusMode::Sun => {
-            look.target = Vec3::ZERO;
-        }
-        FocusMode::Planet(focused_name) => {
-            for (transform, name) in planets.iter() {
-                if focused_name == name.as_ref() {
-                    look.target = transform.translation();
-                }
-            }
-        }
-    }
-}
-
-fn draw_orbits(
-    mut lines: Gizmos,
-    planets: Query<(&Planet, &Handle<StandardMaterial>)>,
-    materials: Res<Assets<StandardMaterial>>,
-    state: Res<State>,
-    camera: Query<&GlobalTransform, With<Camera>>,
-) {
-    if !state.draw_orbits {
-        return;
-    }
-
-    let camera = camera.single();
-    let camera_position = camera.translation();
-
-    for (planet, mat) in planets.iter() {
-        let color = materials.get(mat).unwrap().base_color;
-
-        let first_position =
-            zup2yup(planet.state_vectors.position) * state.distance_scaling;
-        let mut prev_position = first_position.clone();
-
-        let period = planet.state_vectors.period(state.star_mass);
-        let step = period / state.orbit_subdivisions as f32;
-
-        let orbit_positions = (0..state.orbit_subdivisions)
-            .map(|i| {
-                let dt = i as f32 * step;
-
-                let StateVectors { position, .. } = planet
-                    .state_vectors
-                    .propagate_kepler(dt, state.star_mass, state.tolerance);
-
-                position
-            })
-            .collect::<Vec<_>>();
-
-        for pos in orbit_positions {
-            let position = zup2yup(pos) * state.distance_scaling;
-
-            lines.line(prev_position, position, color);
-
-            prev_position = position;
-        }
-
-        // for i in 0..state.orbit_subdivisions {
-        //     let dt = i as f32 * step;
-
-        //     let StateVectors { position, .. } =
-        //         planet.state_vectors.propagate_kepler(
-        //             dt,
-        //             state.star_mass,
-        //             state.tolerance,
-        //         );
-        //     let position = zup2yup(position) * state.distance_scaling;
-
-        //     lines.line(prev_position, position, color);
-
-        //     prev_position = position;
-        // }
-
-        // Close the loop
-        lines.line(prev_position, first_position, color);
-
-        let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
-
-        if state.show_position_and_velocity {
-            let StateVectors { position, velocity } = planet.state_vectors;
-
-            let position = zup2yup(position);
-            let velocity = zup2yup(velocity);
-
-            let p = position * state.distance_scaling;
-            let v = velocity * state.distance_scaling * state.velocity_scaling;
-
-            debug_arrows.draw_arrow(Vec3::ZERO, p, color);
-            debug_arrows.draw_arrow(p, p + v, Color::RED);
-        }
-
-        let orbit = planet.orbit;
-        if state.show_nodes {
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.ascending_node(state.star_mass))
-                    * state.distance_scaling,
-                Color::YELLOW_GREEN,
-            );
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.descending_node(state.star_mass))
-                    * state.distance_scaling,
-                Color::YELLOW,
-            );
-        }
-
-        if state.show_peri_and_apo_apsis {
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.periapsis(state.star_mass))
-                    * state.distance_scaling,
-                Color::WHITE,
-            );
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.apoapsis(state.star_mass))
-                    * state.distance_scaling,
-                Color::WHITE,
-            );
-        }
-    }
-}
-
-fn draw_soi(
-    mut lines: Gizmos,
-    planets: Query<&Planet>,
-    state: Res<State>,
-    camera: Query<&GlobalTransform, With<Camera>>,
-) {
-    if !state.draw_soi {
-        return;
-    }
-
-    let camera = camera.single();
-
-    let camera_position = camera.translation();
-
-    for planet in planets.iter() {
-        let r = planet.state_vectors.position.length();
-
-        let soi =
-            keplerian_elements::astro::soi(r, planet.mass, state.star_mass)
-                * state.distance_scaling;
-
-        let pos =
-            zup2yup(planet.state_vectors.position) * state.distance_scaling;
-
-        let to_camera = (camera_position - pos).normalize();
-        let planet_camera_radial = to_camera.cross(pos).normalize();
-
-        let mut prev_pos = pos + planet_camera_radial * soi;
-        for i in 0..=100 {
-            let t = i as f32 * 2.0 * PI / 100.0;
-
-            let rot_matrix = Mat3::from_axis_angle(to_camera, t);
-
-            let p = rot_matrix * planet_camera_radial;
-            let p = pos + p * soi;
-
-            lines.line(prev_pos, p, Color::WHITE);
-
-            prev_pos = p;
-        }
-    }
-}
-
-const ARROW_WING_LENGTH: f32 = 1.0;
-const ARROW_WING_ANGLE: f32 = 30.0;
-
-fn draw_axis(mut lines: Gizmos, state: Res<State>) {
-    if !state.draw_axis {
-        return;
-    }
-
-    const ORIGIN: Vec3 = Vec3::ZERO;
-
-    lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::X, Color::RED);
-    lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::Y, Color::GREEN);
-    lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::Z, Color::BLUE);
-}
-
-struct DebugArrows<'a, 'g> {
-    lines: &'a mut Gizmos<'g>,
-    camera_position: Vec3,
-}
-
-impl<'a, 'g> DebugArrows<'a, 'g> {
-    pub fn new(lines: &'a mut Gizmos<'g>, camera_position: Vec3) -> Self {
-        Self {
-            lines,
-            camera_position,
-        }
-    }
-
-    pub fn draw_arrow(&mut self, start: Vec3, end: Vec3, color: Color) {
-        self.lines.line(start, end, color);
-
-        let to_start = (start - end).normalize();
-        let axis_start = closest_point(self.camera_position, start, end);
-        let rot_axis = (self.camera_position - axis_start).normalize();
-
-        let angle = deg2rad(ARROW_WING_ANGLE);
-        let rot_1 = Quat::from_axis_angle(rot_axis, angle);
-        let rot_2 = Quat::from_axis_angle(rot_axis, -angle);
-
-        let wing_1 = (rot_1 * to_start) * ARROW_WING_LENGTH + end;
-        let wing_2 = (rot_2 * to_start) * ARROW_WING_LENGTH + end;
-
-        self.lines.line(end, wing_1, color);
-        self.lines.line(end, wing_2, color);
-    }
-}
-
-/// Finds the closest point on the line segment defined by `a` and `b` to `pos`.
-/// By definition the lines given by a and b and the pos and found point must be perpendicular.
-fn closest_point(pos: Vec3, a: Vec3, b: Vec3) -> Vec3 {
-    let ab = b - a;
-    let ap = pos - a;
-
-    let t = ap.dot(ab) / ab.dot(ab);
-
-    if t < 0.0 {
-        a
-    } else if t > 1.0 {
-        b
-    } else {
-        a + ab * t
-    }
-}
-
-fn deg2rad(deg: f32) -> f32 {
-    deg * std::f32::consts::PI / 180.0
 }
 
 fn mass2radius(state: &State, mass: f32) -> f32 {
