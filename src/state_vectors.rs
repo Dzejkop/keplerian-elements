@@ -220,7 +220,7 @@ impl StateVectors {
         };
 
         if ret.position.is_nan() || ret.velocity.is_nan() {
-            println!("propagate_kepler({self:?}, {dt}, {mass}, {tolerance}) -> {ret:?}");
+            eprintln!("propagate_kepler({self:?}, {dt}, {mass}, {tolerance}) -> {ret:?}");
             panic!("Kepler propagation failed");
         }
 

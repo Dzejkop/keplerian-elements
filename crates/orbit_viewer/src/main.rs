@@ -3,18 +3,20 @@ use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use keplerian_elements::constants::AU;
-use keplerian_elements::{KeplerianElements, StateVectors};
+use keplerian_elements::KeplerianElements;
+use planet::{Planet, PlanetBundle};
 use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
-const USE_REAL_SOLAR_SYSTEM: bool = true;
+const USE_REAL_SOLAR_SYSTEM: bool = false;
 const BASE_TOLERANCE: f32 = 0.01;
-const STAR_MASS: f32 = 1.989e20;
+const STAR_MASS: f32 = 1.989e8;
 
 mod debug_arrows;
 mod draw;
+mod planet;
 mod ui;
 mod update;
 
@@ -66,34 +68,6 @@ enum FocusMode {
     Sun,
     // By name - inefficient, but I don't care
     Planet(String),
-}
-
-#[derive(Component)]
-struct Planet {
-    orbit: KeplerianElements,
-    state_vectors: StateVectors,
-    mass: f32,
-    last_update_epoch: f32,
-}
-
-impl Planet {
-    pub fn new_from_orbit(
-        orbit: KeplerianElements,
-        mass: f32,
-        central_mass: f32,
-        tolerance: f32,
-    ) -> Self {
-        Self {
-            orbit,
-            state_vectors: orbit.state_vectors_at_epoch(
-                central_mass,
-                0.0,
-                tolerance,
-            ),
-            mass,
-            last_update_epoch: 0.0,
-        }
-    }
 }
 
 #[derive(Component)]
@@ -204,15 +178,16 @@ fn spawn_test_system(
         })
     };
 
-    commands
+    let parent_mass = 3.285e6;
+    let parent_planet = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
-            material: planet_material(Color::BEIGE),
+            material: planet_material(Color::RED),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
-                semi_major_axis: 0.38709927 * AU,
+                semi_major_axis: 10.38709927 * AU,
                 eccentricity: 0.20563593,
                 inclination: 0.12,
                 right_ascension_of_the_ascending_node: 0.84,
@@ -220,11 +195,36 @@ fn spawn_test_system(
                 mean_anomaly_at_epoch: 4.40,
                 epoch: 0.0, // Example epoch year
             },
-            3.285,
+            3.285e6,
             STAR_MASS,
             BASE_TOLERANCE,
         ))
-        .insert(Name::new("Test Planet"));
+        .insert(Name::new("Test Planet"))
+        .id();
+
+    commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::BLUE),
+            ..Default::default()
+        })
+        .insert(
+            PlanetBundle::builder(
+                KeplerianElements {
+                    semi_major_axis: 0.38709927 * AU,
+                    eccentricity: 0.20563593,
+                    inclination: 0.12,
+                    right_ascension_of_the_ascending_node: 0.84,
+                    argument_of_periapsis: 1.35,
+                    mean_anomaly_at_epoch: 4.40,
+                    epoch: 0.0, // Example epoch year
+                },
+                1.723e4,
+            )
+            .with_parent(parent_planet)
+            .build(parent_mass, BASE_TOLERANCE),
+        )
+        .insert(Name::new("Test Moon"));
 }
 
 fn spawn_solar_system(
@@ -247,7 +247,7 @@ fn spawn_solar_system(
             material: planet_material(Color::BEIGE),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 semi_major_axis: 0.38709927 * AU,
                 eccentricity: 0.20563593,
@@ -269,7 +269,7 @@ fn spawn_solar_system(
             material: planet_material(Color::ORANGE),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 semi_major_axis: 0.7233 * AU,
                 eccentricity: 0.00676,
@@ -291,7 +291,7 @@ fn spawn_solar_system(
             material: planet_material(Color::BLUE),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 eccentricity: 0.01673,
                 semi_major_axis: 1.0000 * AU,
@@ -313,7 +313,7 @@ fn spawn_solar_system(
             material: planet_material(Color::RED),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 eccentricity: 0.09339410,
                 semi_major_axis: 1.52371034 * AU,
@@ -336,7 +336,7 @@ fn spawn_solar_system(
             material: planet_material(Color::GREEN),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 eccentricity: 0.04854,
                 semi_major_axis: 5.2025 * AU,
@@ -359,7 +359,7 @@ fn spawn_solar_system(
             material: planet_material(Color::YELLOW_GREEN),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 eccentricity: 0.05551,
                 semi_major_axis: 9.5415 * AU,
@@ -382,7 +382,7 @@ fn spawn_solar_system(
             material: planet_material(Color::ALICE_BLUE),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 eccentricity: 0.04686,
                 semi_major_axis: 19.188 * AU,
@@ -405,7 +405,7 @@ fn spawn_solar_system(
             material: planet_material(Color::MIDNIGHT_BLUE),
             ..Default::default()
         })
-        .insert(Planet::new_from_orbit(
+        .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
                 eccentricity: 0.00895,
                 semi_major_axis: 30.070 * AU,

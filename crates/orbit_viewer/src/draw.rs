@@ -6,11 +6,17 @@ use keplerian_elements::StateVectors;
 
 use super::State;
 use crate::debug_arrows::DebugArrows;
+use crate::planet::{PlanetMass, PlanetParent};
 use crate::Planet;
+
+const SOI_SEGMENTS: usize = 50;
 
 pub fn orbits(
     mut lines: Gizmos,
-    planets: Query<(&Planet, &Handle<StandardMaterial>)>,
+    planets: Query<Entity, With<Planet>>,
+    planet_data: Query<(&Planet, &PlanetParent, &Handle<StandardMaterial>)>,
+    planet_masses: Query<&PlanetMass>,
+    transforms: Query<&Transform>,
     materials: Res<Assets<StandardMaterial>>,
     state: Res<State>,
     camera: Query<&GlobalTransform, With<Camera>>,
@@ -22,14 +28,35 @@ pub fn orbits(
     let camera = camera.single();
     let camera_position = camera.translation();
 
-    for (planet, mat) in planets.iter() {
+    for planet_entity in planets.iter() {
+        let Ok((planet, parent, mat)) = planet_data.get(planet_entity) else {
+            warn!("Planet missing planet data");
+            continue;
+        };
+
+        let central_mass = if let Some(parent) = parent.0 {
+            planet_masses.get(parent).expect("No mass for parent").0
+        } else {
+            state.star_mass
+        };
+
         let color = materials.get(mat).unwrap().base_color;
 
-        let first_position =
-            zup2yup(planet.state_vectors.position) * state.distance_scaling;
+        let offset = if let Some(parent) = parent.0 {
+            let transform = transforms
+                .get(parent)
+                .expect("Parent planet does not exist");
+
+            transform.translation
+        } else {
+            Vec3::ZERO
+        };
+
+        let first_position = offset
+            + zup2yup(planet.state_vectors.position) * state.distance_scaling;
         let mut prev_position = first_position.clone();
 
-        let period = planet.state_vectors.period(state.star_mass);
+        let period = planet.state_vectors.period(central_mass);
         let step = period / state.orbit_subdivisions as f32;
 
         let orbit_positions = (0..state.orbit_subdivisions)
@@ -38,14 +65,14 @@ pub fn orbits(
 
                 let StateVectors { position, .. } = planet
                     .state_vectors
-                    .propagate_kepler(dt, state.star_mass, state.tolerance);
+                    .propagate_kepler(dt, central_mass, state.tolerance);
 
                 position
             })
             .collect::<Vec<_>>();
 
         for pos in orbit_positions {
-            let position = zup2yup(pos) * state.distance_scaling;
+            let position = offset + zup2yup(pos) * state.distance_scaling;
 
             lines.line(prev_position, position, color);
 
@@ -74,13 +101,13 @@ pub fn orbits(
         if state.show_nodes {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.ascending_node(state.star_mass))
+                zup2yup(orbit.ascending_node(central_mass))
                     * state.distance_scaling,
                 Color::YELLOW_GREEN,
             );
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.descending_node(state.star_mass))
+                zup2yup(orbit.descending_node(central_mass))
                     * state.distance_scaling,
                 Color::YELLOW,
             );
@@ -89,14 +116,12 @@ pub fn orbits(
         if state.show_peri_and_apo_apsis {
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.periapsis(state.star_mass))
-                    * state.distance_scaling,
+                zup2yup(orbit.periapsis(central_mass)) * state.distance_scaling,
                 Color::WHITE,
             );
             debug_arrows.draw_arrow(
                 Vec3::ZERO,
-                zup2yup(orbit.apoapsis(state.star_mass))
-                    * state.distance_scaling,
+                zup2yup(orbit.apoapsis(central_mass)) * state.distance_scaling,
                 Color::WHITE,
             );
         }
@@ -105,7 +130,9 @@ pub fn orbits(
 
 pub fn soi(
     mut lines: Gizmos,
-    planets: Query<&Planet>,
+    planets: Query<(Entity, &Planet, &PlanetParent)>,
+    transforms: Query<&Transform>,
+    planet_masses: Query<&PlanetMass>,
     state: Res<State>,
     camera: Query<&GlobalTransform, With<Camera>>,
 ) {
@@ -117,22 +144,38 @@ pub fn soi(
 
     let camera_position = camera.translation();
 
-    for planet in planets.iter() {
+    for (entity, planet, parent) in planets.iter() {
         let r = planet.state_vectors.position.length();
 
-        let soi =
-            keplerian_elements::astro::soi(r, planet.mass, state.star_mass)
-                * state.distance_scaling;
+        let central_mass = if let Some(parent) = parent.0 {
+            planet_masses.get(parent).unwrap().0
+        } else {
+            state.star_mass
+        };
+        let mass = planet_masses.get(entity).unwrap();
 
-        let pos =
-            zup2yup(planet.state_vectors.position) * state.distance_scaling;
+        let offset = if let Some(parent) = parent.0 {
+            let transform = transforms
+                .get(parent)
+                .expect("Parent planet does not exist");
+
+            transform.translation
+        } else {
+            Vec3::ZERO
+        };
+
+        let soi = keplerian_elements::astro::soi(r, mass.0, central_mass)
+            * state.distance_scaling;
+
+        let pos = offset
+            + zup2yup(planet.state_vectors.position) * state.distance_scaling;
 
         let to_camera = (camera_position - pos).normalize();
         let planet_camera_radial = to_camera.cross(pos).normalize();
 
         let mut prev_pos = pos + planet_camera_radial * soi;
-        for i in 0..=100 {
-            let t = i as f32 * 2.0 * PI / 100.0;
+        for i in 0..=SOI_SEGMENTS {
+            let t = i as f32 * 2.0 * PI / SOI_SEGMENTS as f32;
 
             let rot_matrix = Mat3::from_axis_angle(to_camera, t);
 

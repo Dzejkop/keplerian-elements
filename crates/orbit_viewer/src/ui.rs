@@ -5,6 +5,8 @@ use keplerian_elements::utils::{yup2zup, zup2yup};
 use smooth_bevy_cameras::controllers::orbit::OrbitCameraController;
 
 use super::{FocusMode, Planet, State};
+use crate::mass2radius;
+use crate::planet::PlanetMass;
 
 #[derive(Debug, Clone, Default)]
 pub struct UiState {
@@ -18,7 +20,7 @@ pub fn render(
     mut ui_state: Local<UiState>,
     mut egui_context: EguiContexts,
     mut state: ResMut<State>,
-    mut planets: Query<(&mut Planet, &Name)>,
+    mut planets: Query<(&mut Planet, &mut PlanetMass, &Name)>,
     mut camera: Query<&mut OrbitCameraController>,
     camera_transform: Query<&GlobalTransform, With<OrbitCameraController>>,
 ) {
@@ -40,7 +42,7 @@ pub fn render(
         });
     });
 
-    egui::TopBottomPanel::bottom("Bototm").show(ctx, |ui| {
+    egui::TopBottomPanel::bottom("Bottom").show(ctx, |ui| {
         ui.horizontal(|ui| {
             if let Ok(camera_transform) = camera_transform.get_single() {
                 let translation = camera_transform.translation();
@@ -56,7 +58,7 @@ pub fn render(
 
     egui::SidePanel::left("Left").show(ctx, |ui| {
         ui.heading("Planets:");
-        for (idx, (_planet, name)) in planets.iter().enumerate() {
+        for (idx, (_planet, _mass, name)) in planets.iter().enumerate() {
             let selected = ui_state.selected_planet == Some(idx);
 
             if ui.selectable_label(selected, name.as_str()).clicked() {
@@ -71,7 +73,7 @@ pub fn render(
         ui.separator();
 
         if let Some(selected_idx) = ui_state.selected_planet {
-            let (_idx, (mut planet, name)) = planets
+            let (_idx, (mut planet, mut planet_mass, name)) = planets
                 .iter_mut()
                 .enumerate()
                 .find(|(idx, _)| *idx == selected_idx)
@@ -79,7 +81,7 @@ pub fn render(
 
             ui.heading(name.to_string());
 
-            value_slider(ui, "Mass", &mut planet.mass);
+            value_slider(ui, "Mass", &mut planet_mass.0);
 
             // --- State Vectors ---
             let sv = &mut planet.state_vectors;
@@ -109,6 +111,19 @@ pub fn render(
             if ui.button("Focus").clicked() {
                 state.focus_mode = FocusMode::Planet(name.to_string());
             }
+
+            ui.label("Readouts:");
+
+            let r = planet.state_vectors.position.length();
+            let soi = keplerian_elements::astro::soi(
+                r,
+                planet_mass.0,
+                state.star_mass,
+            );
+            ui.label(format!("SOI: {soi}"));
+
+            let radius = mass2radius(state.as_ref(), planet_mass.0);
+            ui.label(format!("Radius: {radius}"));
         }
     });
 
@@ -236,7 +251,7 @@ pub fn render(
                         state.focus_mode = FocusMode::Sun;
                     }
 
-                    for (_, name) in &planets {
+                    for (_, _, name) in &planets {
                         if ui
                             .selectable_label(
                                 current == name.to_string(),
