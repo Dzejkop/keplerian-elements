@@ -4,10 +4,11 @@ use smooth_bevy_cameras::LookTransform;
 
 use super::{mass2radius, FocusMode, Planet, Star, State};
 use crate::planet::{PlanetMass, PlanetParent};
+use crate::Epoch;
 
-pub fn epoch(time: Res<Time>, mut state: ResMut<State>) {
+pub fn epoch(time: Res<Time>, mut epoch: ResMut<Epoch>, state: Res<State>) {
     if state.update_epoch {
-        state.epoch += state.epoch_scale * time.delta_seconds();
+        epoch.0 += state.epoch_scale * time.delta_seconds();
     }
 }
 
@@ -15,10 +16,10 @@ pub fn planets(
     planet_entities: Query<Entity, With<Planet>>,
     mut planets: Query<&mut Planet>,
     mut transforms: Query<&mut Transform>,
-    names: Query<&Name>,
     parents: Query<&PlanetParent>,
     planet_masses: Query<&PlanetMass>,
     state: Res<State>,
+    epoch: Res<Epoch>,
 ) {
     for entity in planet_entities.iter() {
         let Ok(parent) = parents.get(entity) else {
@@ -31,10 +32,7 @@ pub fn planets(
             continue;
         };
 
-        let name = names.get(entity).unwrap().as_ref();
-        info!("Updating planet {name}");
-
-        let dt = state.epoch - planet.last_update_epoch;
+        let dt = epoch.0 - planet.last_update_epoch;
         let central_mass = if let Some(parent) = parent.0 {
             planet_masses.get(parent).unwrap().0
         } else {
@@ -63,7 +61,7 @@ pub fn planets(
             central_mass,
             state.tolerance,
         );
-        planet.last_update_epoch = state.epoch;
+        planet.last_update_epoch = epoch.0;
 
         let position = zup2yup(planet.state_vectors.position);
 

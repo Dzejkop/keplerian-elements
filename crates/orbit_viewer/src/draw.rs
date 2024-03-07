@@ -4,10 +4,12 @@ use bevy::prelude::*;
 use keplerian_elements::utils::zup2yup;
 use keplerian_elements::StateVectors;
 
-use super::State;
 use crate::debug_arrows::DebugArrows;
 use crate::planet::{PlanetMass, PlanetParent};
-use crate::Planet;
+use crate::trajectory::{
+    SimulatorSettings, SimulatorState, TrajectorySimulator,
+};
+use crate::{Planet, State};
 
 const SOI_SEGMENTS: usize = 50;
 
@@ -199,4 +201,79 @@ pub fn axis(mut lines: Gizmos, state: Res<State>) {
     lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::X, Color::RED);
     lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::Y, Color::GREEN);
     lines.line(ORIGIN, ORIGIN + state.axis_scale * Vec3::Z, Color::BLUE);
+}
+
+pub fn trajectory(
+    state: Res<State>,
+    mut gizmos: Gizmos,
+    simulator_state: Res<SimulatorState>,
+    simulator: Res<TrajectorySimulator>,
+    simulator_settings: Res<SimulatorSettings>,
+    camera: Query<&GlobalTransform, With<Camera>>,
+) {
+    if !simulator_state.enabled {
+        return;
+    }
+
+    // TODO: Move to settings
+    const SIMULATOR_LOC_SCALE: f32 = 500.0;
+
+    let origin = zup2yup(simulator.origin) * state.distance_scaling;
+
+    gizmos.line(
+        origin,
+        origin + Vec3::Y * SIMULATOR_LOC_SCALE,
+        Color::YELLOW,
+    );
+    gizmos.line(
+        origin,
+        origin + Vec3::X * SIMULATOR_LOC_SCALE,
+        Color::YELLOW,
+    );
+    gizmos.line(
+        origin,
+        origin + Vec3::Z * SIMULATOR_LOC_SCALE,
+        Color::YELLOW,
+    );
+
+    let camera = camera.single();
+
+    let camera_position = camera.translation();
+
+    let mut debug_arrows = DebugArrows::new(&mut gizmos, camera_position);
+
+    let v = zup2yup(simulator.velocity) * state.velocity_scaling;
+
+    // Draw velocity
+    debug_arrows.draw_arrow(origin, origin + v, Color::YELLOW_GREEN);
+
+    let segments = &simulator.segments;
+    for segment in segments {
+        let mut pos =
+            zup2yup(segment.entry_sv.position) * state.distance_scaling;
+
+        for i in 0..=simulator_settings.max_steps {
+            let t = i as f32 * simulator_settings.step;
+
+            let sv = segment.entry_sv.try_propagate_kepler(
+                t,
+                state.star_mass,
+                state.tolerance,
+            );
+
+            let sv = match sv {
+                Some(sv) => sv,
+                None => {
+                    error!("Failed to propagate kepler");
+                    break;
+                }
+            };
+
+            let next_pos = zup2yup(sv.position) * state.distance_scaling;
+
+            gizmos.line(pos, next_pos, Color::WHITE);
+
+            pos = next_pos;
+        }
+    }
 }

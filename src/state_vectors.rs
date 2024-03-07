@@ -142,12 +142,12 @@ impl StateVectors {
         astro::period(a, central_mass)
     }
 
-    pub fn propagate_kepler(
+    pub fn try_propagate_kepler(
         self,
         dt: Num,
         mass: Num,
         tolerance: Num,
-    ) -> StateVectors {
+    ) -> Option<StateVectors> {
         let μ = standard_gravitational_parameter(mass);
 
         let r0 = self.position.length();
@@ -221,10 +221,26 @@ impl StateVectors {
 
         if ret.position.is_nan() || ret.velocity.is_nan() {
             eprintln!("propagate_kepler({self:?}, {dt}, {mass}, {tolerance}) -> {ret:?}");
+            None
+        } else {
+            Some(ret)
+        }
+    }
+
+    pub fn propagate_kepler(
+        self,
+        dt: Num,
+        mass: Num,
+        tolerance: Num,
+    ) -> StateVectors {
+        let result = self.try_propagate_kepler(dt, mass, tolerance);
+
+        if let Some(result) = result {
+            result
+        } else {
+            eprintln!("propagate_kepler({self:?}, {dt}, {mass}, {tolerance}) -> {result:?}");
             panic!("Kepler propagation failed");
         }
-
-        ret
     }
 }
 

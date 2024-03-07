@@ -9,6 +9,7 @@ use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::LookTransformPlugin;
+use trajectory::{RecalculateTrajectory, SimulatorState, TrajectorySimulator};
 
 const USE_REAL_SOLAR_SYSTEM: bool = false;
 const BASE_TOLERANCE: f32 = 0.01;
@@ -17,6 +18,7 @@ const STAR_MASS: f32 = 1.989e8;
 mod debug_arrows;
 mod draw;
 mod planet;
+mod trajectory;
 mod ui;
 mod update;
 
@@ -27,7 +29,10 @@ fn main() {
         .add_plugins(OrbitCameraPlugin::new(false))
         .add_plugins(EguiPlugin)
         .add_systems(Startup, setup)
+        .init_resource::<ui::UiState>()
         .add_systems(Update, ui::render)
+        .add_systems(Update, ui::simulator_window)
+        .add_systems(Update, ui::simulator_settings_window)
         .add_systems(Update, update::epoch)
         .add_systems(Update, update::planets)
         .add_systems(Update, update::star)
@@ -35,6 +40,12 @@ fn main() {
         .add_systems(Update, draw::orbits)
         .add_systems(Update, draw::axis)
         .add_systems(Update, draw::soi)
+        .add_systems(Update, draw::trajectory)
+        .init_resource::<trajectory::TrajectorySimulator>()
+        .init_resource::<trajectory::SimulatorSettings>()
+        .init_resource::<trajectory::SimulatorState>()
+        .add_event::<RecalculateTrajectory>()
+        .add_systems(Update, trajectory::recalculate)
         .run();
 }
 
@@ -43,7 +54,6 @@ struct State {
     star_mass: f32,
     tolerance: f32,
 
-    epoch: f32,
     update_epoch: bool,
     epoch_scale: f32,
 
@@ -62,6 +72,9 @@ struct State {
     velocity_scaling: f32,
     focus_mode: FocusMode,
 }
+
+#[derive(Debug, Clone, Copy, Resource)]
+pub struct Epoch(pub f32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FocusMode {
@@ -89,7 +102,6 @@ fn setup(
         tolerance: BASE_TOLERANCE,
         // Sun Mass
         star_mass: STAR_MASS,
-        epoch: 0.0,
         epoch_scale: 1000.0,
         update_epoch: true,
         draw_orbits: true,
@@ -104,6 +116,8 @@ fn setup(
         velocity_scaling: 100000.0,
         focus_mode: FocusMode::Sun,
     });
+
+    commands.insert_resource(Epoch(0.0));
 
     let sphere = meshes.add(
         shape::Icosphere {

@@ -5,21 +5,28 @@ use keplerian_elements::utils::{yup2zup, zup2yup};
 use smooth_bevy_cameras::controllers::orbit::OrbitCameraController;
 
 use super::{FocusMode, Planet, State};
-use crate::mass2radius;
 use crate::planet::PlanetMass;
+use crate::trajectory::{
+    RecalculateTrajectory, SimulatorSettings, SimulatorState,
+    TrajectorySimulator,
+};
+use crate::{mass2radius, Epoch};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Resource, Debug, Clone, Default)]
 pub struct UiState {
     selected_planet: Option<usize>,
     settings_visible: bool,
     about_visible: bool,
     focus_visible: bool,
+    simulator_settings_visible: bool,
 }
 
 pub fn render(
-    mut ui_state: Local<UiState>,
+    mut ui_state: ResMut<UiState>,
     mut egui_context: EguiContexts,
+    mut simulator_state: ResMut<SimulatorState>,
     mut state: ResMut<State>,
+    mut epoch: ResMut<Epoch>,
     mut planets: Query<(&mut Planet, &mut PlanetMass, &Name)>,
     mut camera: Query<&mut OrbitCameraController>,
     camera_transform: Query<&GlobalTransform, With<OrbitCameraController>>,
@@ -39,6 +46,15 @@ pub fn render(
             if ui.button("Focus").clicked() {
                 ui_state.focus_visible = !ui_state.focus_visible;
             }
+
+            if ui.button("Trajectory").clicked() {
+                simulator_state.enabled = !simulator_state.enabled;
+            }
+
+            if ui.button("Trajectory Simulator Settings").clicked() {
+                ui_state.simulator_settings_visible =
+                    !ui_state.simulator_settings_visible;
+            }
         });
     });
 
@@ -49,7 +65,7 @@ pub fn render(
                 ui.label(format!("Camera Position: {translation}"));
             }
 
-            let epoch_seconds = state.epoch;
+            let epoch_seconds = epoch.0;
             let (y, m, d) = epoch_years_months_days(epoch_seconds as f64);
 
             ui.label(format!("Epoch: {y:.0}Y {m:.0}M {d:.0}D"));
@@ -85,25 +101,20 @@ pub fn render(
 
             // --- State Vectors ---
             let sv = &mut planet.state_vectors;
-            ui.label("Position");
 
             let mut p = zup2yup(sv.position * state.distance_scaling);
 
-            value_slider(ui, "X", &mut p.x);
-            value_slider(ui, "Y", &mut p.y);
-            value_slider(ui, "Z", &mut p.z);
+            ui.label("Position");
+            vec3_slider(ui, &mut p);
 
             sv.position = yup2zup(p / state.distance_scaling);
-
-            ui.label("Velocity");
 
             let mut v = zup2yup(
                 sv.velocity * state.distance_scaling * state.velocity_scaling,
             );
 
-            value_slider(ui, "Vx", &mut v.x);
-            value_slider(ui, "Vy", &mut v.y);
-            value_slider(ui, "Vz", &mut v.z);
+            ui.label("Velocity");
+            vec3_slider(ui, &mut v);
 
             sv.velocity =
                 yup2zup(v / (state.distance_scaling * state.velocity_scaling));
@@ -139,7 +150,7 @@ pub fn render(
                 100.0,
             );
             value_slider(ui, "Mass", &mut state.star_mass);
-            value_slider(ui, "Epoch", &mut state.epoch);
+            value_slider(ui, "Epoch", &mut epoch.0);
             value_slider(ui, "Epoch scale", &mut state.epoch_scale);
             ui.checkbox(&mut state.update_epoch, "Update Epoch");
 
@@ -265,6 +276,54 @@ pub fn render(
                     }
                 });
         });
+}
+
+pub fn simulator_window(
+    mut egui_context: EguiContexts,
+    mut simulator_state: ResMut<SimulatorState>,
+    mut simulator: ResMut<TrajectorySimulator>,
+    mut recalculate_event_writer: EventWriter<RecalculateTrajectory>,
+) {
+    let ctx = egui_context.ctx_mut();
+
+    egui::Window::new("Trajectory")
+        .open(&mut simulator_state.enabled)
+        .show(ctx, |ui| {
+            ui.label("Origin");
+            vec3_slider(ui, &mut simulator.origin);
+
+            ui.label("Velocity");
+            vec3_slider(ui, &mut simulator.velocity);
+
+            if ui.button("Recalculate").clicked() {
+                recalculate_event_writer.send(RecalculateTrajectory);
+            }
+        });
+}
+
+pub fn simulator_settings_window(
+    mut ui_state: ResMut<UiState>,
+    mut egui_context: EguiContexts,
+    mut simulator_settings: ResMut<SimulatorSettings>,
+) {
+    let ctx = egui_context.ctx_mut();
+
+    egui::Window::new("Trajectory Simulator Settings")
+        .open(&mut ui_state.simulator_settings_visible)
+        .show(ctx, |ui| {
+            value_slider(ui, "Step", &mut simulator_settings.step);
+            let mut v = simulator_settings.max_steps as u32;
+            value_slider_u32(ui, "Max steps", &mut v);
+            simulator_settings.max_steps = v as usize;
+        });
+}
+
+fn vec3_slider(ui: &mut Ui, p: &mut Vec3) {
+    ui.horizontal(|ui| {
+        value_slider(ui, "X", &mut p.x);
+        value_slider(ui, "Y", &mut p.y);
+        value_slider(ui, "Z", &mut p.z);
+    });
 }
 
 fn value_slider(ui: &mut Ui, name: &str, value: &mut f32) {
