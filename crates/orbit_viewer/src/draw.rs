@@ -218,7 +218,7 @@ pub fn trajectory(
     // TODO: Move to settings
     const SIMULATOR_LOC_SCALE: f32 = 500.0;
 
-    let origin = zup2yup(simulator.origin) * state.distance_scaling;
+    let origin = zup2yup(simulator.origin * state.distance_scaling);
 
     gizmos.line(
         origin,

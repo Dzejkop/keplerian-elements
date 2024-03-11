@@ -20,7 +20,7 @@ pub struct SimulatorSettings {
 impl Default for SimulatorSettings {
     fn default() -> Self {
         Self {
-            step: 60.0,
+            step: 60000002048.00,
             max_steps: 1000,
         }
     }

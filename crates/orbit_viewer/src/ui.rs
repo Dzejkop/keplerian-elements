@@ -106,6 +106,7 @@ pub fn render(
 
             ui.label("Position");
             vec3_slider(ui, &mut p);
+            ui.label(format!("{:?}", sv.position));
 
             sv.position = yup2zup(p / state.distance_scaling);
 
@@ -115,6 +116,7 @@ pub fn render(
 
             ui.label("Velocity");
             vec3_slider(ui, &mut v);
+            ui.label(format!("{:?}", sv.velocity));
 
             sv.velocity =
                 yup2zup(v / (state.distance_scaling * state.velocity_scaling));
@@ -279,6 +281,7 @@ pub fn render(
 }
 
 pub fn simulator_window(
+    state: Res<State>,
     mut egui_context: EguiContexts,
     mut simulator_state: ResMut<SimulatorState>,
     mut simulator: ResMut<TrajectorySimulator>,
@@ -289,11 +292,20 @@ pub fn simulator_window(
     egui::Window::new("Trajectory")
         .open(&mut simulator_state.enabled)
         .show(ctx, |ui| {
+            let mut o = zup2yup(simulator.origin * state.distance_scaling);
             ui.label("Origin");
-            vec3_slider(ui, &mut simulator.origin);
+            vec3_slider(ui, &mut o);
+            simulator.origin = yup2zup(o / state.distance_scaling);
 
+            let mut v = zup2yup(
+                simulator.velocity
+                    * state.distance_scaling
+                    * state.velocity_scaling,
+            );
             ui.label("Velocity");
-            vec3_slider(ui, &mut simulator.velocity);
+            vec3_slider(ui, &mut v);
+            simulator.velocity =
+                yup2zup(v / (state.distance_scaling * state.velocity_scaling));
 
             if ui.button("Recalculate").clicked() {
                 recalculate_event_writer.send(RecalculateTrajectory);

@@ -9,7 +9,7 @@ use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::LookTransformPlugin;
-use trajectory::{RecalculateTrajectory, SimulatorState, TrajectorySimulator};
+use trajectory::RecalculateTrajectory;
 
 const USE_REAL_SOLAR_SYSTEM: bool = false;
 const BASE_TOLERANCE: f32 = 0.01;
@@ -113,7 +113,7 @@ fn setup(
         draw_axis: true,
         axis_scale: 10000.0,
         distance_scaling: 1e-6,
-        velocity_scaling: 100000.0,
+        velocity_scaling: 1e11,
         focus_mode: FocusMode::Sun,
     });
 
