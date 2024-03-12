@@ -204,6 +204,8 @@ pub fn axis(mut lines: Gizmos, state: Res<State>) {
 }
 
 pub fn trajectory(
+    planets: Query<&Planet>,
+    masses: Query<&PlanetMass>,
     state: Res<State>,
     mut gizmos: Gizmos,
     simulator_state: Res<SimulatorState>,
@@ -255,9 +257,25 @@ pub fn trajectory(
         for i in 0..=simulator_settings.max_steps {
             let t = i as f32 * simulator_settings.step;
 
-            let sv = segment.entry_sv.try_propagate_kepler(
+            let central_mass = if let Some(parent) = segment.parent {
+                masses.get(parent).unwrap().0
+            } else {
+                state.star_mass
+            };
+
+            let offset = if let Some(parent) = segment.parent {
+                let planet = planets.get(parent).unwrap();
+                planet.state_vectors.position
+            } else {
+                Vec3::ZERO
+            };
+
+            let mut entry_sv = segment.entry_sv.clone();
+            entry_sv.position -= offset; // Move to the orbital frame
+
+            let sv = entry_sv.try_propagate_kepler(
                 t,
-                state.star_mass,
+                central_mass,
                 state.tolerance,
             );
 
@@ -269,7 +287,7 @@ pub fn trajectory(
                 }
             };
 
-            let next_pos = zup2yup(sv.position) * state.distance_scaling;
+            let next_pos = zup2yup(sv.position + offset) * state.distance_scaling;
 
             gizmos.line(pos, next_pos, Color::WHITE);
 

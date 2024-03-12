@@ -1,7 +1,8 @@
 use bevy::prelude::*;
-use keplerian_elements::StateVectors;
+use keplerian_elements::{astro, StateVectors};
 
-use crate::Epoch;
+use crate::planet::{Planet, PlanetMass, PlanetParent};
+use crate::{Epoch, State};
 
 #[derive(Debug, Clone, Copy, Default, Event)]
 pub struct RecalculateTrajectory;
@@ -44,7 +45,9 @@ pub struct TrajectorySegment {
 }
 
 pub fn recalculate(
+    state: Res<State>,
     epoch: Res<Epoch>,
+    planets: Query<(Entity, &Planet, &PlanetMass, &PlanetParent)>,
     mut trajectory_simulator: ResMut<TrajectorySimulator>,
     _settings: Res<SimulatorSettings>,
     mut recalculate_event_reader: EventReader<RecalculateTrajectory>,
@@ -54,17 +57,55 @@ pub fn recalculate(
     }
 
     info!("Recalculating trajectory...");
-
     let starting_sv = StateVectors::new(
         trajectory_simulator.origin,
         trajectory_simulator.velocity,
     );
+
+    let parent = find_parent(&starting_sv, &state, &planets);
 
     trajectory_simulator.segments.clear();
 
     trajectory_simulator.segments.push(TrajectorySegment {
         entry: epoch.0,
         entry_sv: starting_sv.clone(),
-        parent: None,
+        parent,
     });
+}
+
+fn find_parent(
+    starting_sv: &StateVectors,
+    state: &Res<State>,
+    planets: &Query<(Entity, &Planet, &PlanetMass, &PlanetParent)>,
+) -> Option<Entity> {
+    for (entity, planet, mass, parent) in planets.iter() {
+        let central_mass = if let Some(parent) = parent.0 {
+            planets.get(parent).expect("No mass for parent").2 .0
+        } else {
+            state.star_mass
+        };
+
+        let offset = if let Some(parent) = parent.0 {
+            let (_, parent_planet, _, _) =
+                planets.get(parent).expect("Parent planet does not exist");
+
+            parent_planet.state_vectors.position
+        } else {
+            Vec3::ZERO
+        };
+
+        let real_soi_center = planet.state_vectors.position + offset;
+        let soi = astro::soi(
+            planet.state_vectors.position.length(),
+            mass.0,
+            central_mass,
+        );
+
+        let d = (real_soi_center - starting_sv.position).length();
+        if d < soi {
+            return Some(entity);
+        }
+    }
+
+    None
 }
