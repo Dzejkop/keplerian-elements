@@ -13,7 +13,7 @@ use trajectory::RecalculateTrajectory;
 
 const USE_REAL_SOLAR_SYSTEM: bool = false;
 const BASE_TOLERANCE: f32 = 0.01;
-const STAR_MASS: f32 = 1.989e8;
+const STAR_MASS: f32 = 	1.7565459e28;
 
 mod debug_arrows;
 mod draw;
@@ -192,8 +192,8 @@ fn spawn_test_system(
         })
     };
 
-    let parent_mass = 3.285e6;
-    let parent_planet = commands
+    let kerbin_mass = 5.2915158e22;
+    let kerbin = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
             material: planet_material(Color::RED),
@@ -201,19 +201,19 @@ fn spawn_test_system(
         })
         .insert(PlanetBundle::new_from_orbit(
             KeplerianElements {
-                semi_major_axis: 10.38709927 * AU,
-                eccentricity: 0.20563593,
-                inclination: 0.12,
-                right_ascension_of_the_ascending_node: 0.84,
-                argument_of_periapsis: 1.35,
-                mean_anomaly_at_epoch: 4.40,
+                semi_major_axis: 13_599_840_256.0,
+                eccentricity: 0.0,
+                inclination: 0.0,
+                right_ascension_of_the_ascending_node: 0.0,
+                argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch: 3.14,
                 epoch: 0.0, // Example epoch year
             },
-            3.285e6,
+            kerbin_mass,
             STAR_MASS,
             BASE_TOLERANCE,
         ))
-        .insert(Name::new("Test Planet"))
+        .insert(Name::new("Kerbin"))
         .id();
 
     commands
@@ -225,20 +225,20 @@ fn spawn_test_system(
         .insert(
             PlanetBundle::builder(
                 KeplerianElements {
-                    semi_major_axis: 0.38709927 * AU,
-                    eccentricity: 0.20563593,
-                    inclination: 0.12,
-                    right_ascension_of_the_ascending_node: 0.84,
-                    argument_of_periapsis: 1.35,
-                    mean_anomaly_at_epoch: 4.40,
+                    semi_major_axis: 12_000_000.0,
+                    eccentricity: 0.0,
+                    inclination: 0.0,
+                    right_ascension_of_the_ascending_node: 0.0,
+                    argument_of_periapsis: 0.0,
+                    mean_anomaly_at_epoch: 1.7,
                     epoch: 0.0, // Example epoch year
                 },
-                1.723e4,
+                9.7599066e20,
             )
-            .with_parent(parent_planet)
-            .build(parent_mass, BASE_TOLERANCE),
+            .with_parent(kerbin)
+            .build(kerbin_mass, BASE_TOLERANCE),
         )
-        .insert(Name::new("Test Moon"));
+        .insert(Name::new("Mun"));
 }
 
 fn spawn_solar_system(
@@ -438,5 +438,5 @@ fn spawn_solar_system(
 }
 
 fn mass2radius(state: &State, mass: f32) -> f32 {
-    mass * state.distance_scaling
+    mass * state.distance_scaling * 1e-20
 }

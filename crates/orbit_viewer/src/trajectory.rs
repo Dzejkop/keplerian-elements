@@ -71,6 +71,13 @@ pub fn recalculate(
         entry_sv: starting_sv.clone(),
         parent,
     });
+
+    // Algorithm:
+    // 1. Propagate the segment until: a) it loops around, b) it leaves the SOI, c) it intersects an SOI of a different planet
+    // 2. If:
+    //      a) is true, stop the propagation and add the segment to the list
+    //      b) is true, find SOI exit time and add a second segment with parent of the parent
+    //      c)
 }
 
 fn find_parent(
