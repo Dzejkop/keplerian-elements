@@ -311,7 +311,7 @@ pub fn simulator_settings_window(
     egui::Window::new("Trajectory Simulator Settings")
         .open(&mut ui_state.simulator_settings_visible)
         .show(ctx, |ui| {
-            value_slider(ui, "Step", &mut simulator_settings.step);
+            value_slider(ui, "Step", &mut simulator_settings.epoch_state);
             let mut v = simulator_settings.max_steps as u32;
             value_slider_u32(ui, "Max steps", &mut v);
             simulator_settings.max_steps = v as usize;

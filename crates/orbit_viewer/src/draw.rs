@@ -215,7 +215,7 @@ pub fn trajectory(
             zup2yup(segment.entry_sv.position) * state.distance_scaling;
 
         for i in 0..=simulator_settings.max_steps {
-            let t = i as f32 * simulator_settings.step;
+            let t = i as f32 * simulator_settings.epoch_state;
 
             let central_mass = masses.get(segment.parent).unwrap().0;
 

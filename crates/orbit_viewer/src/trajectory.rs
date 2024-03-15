@@ -14,14 +14,14 @@ pub struct SimulatorState {
 
 #[derive(Resource)]
 pub struct SimulatorSettings {
-    pub step: f32,
+    pub epoch_state: f32,
     pub max_steps: usize,
 }
 
 impl Default for SimulatorSettings {
     fn default() -> Self {
         Self {
-            step: 60000002048.00,
+            epoch_state: 1000.00,
             max_steps: 1000,
         }
     }
