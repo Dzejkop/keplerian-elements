@@ -4,8 +4,8 @@ use bevy_egui::{egui, EguiContexts};
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use smooth_bevy_cameras::controllers::orbit::OrbitCameraController;
 
-use super::{FocusMode, Planet, State};
-use crate::planet::PlanetMass;
+use super::{CelestialBody, FocusMode, State};
+use crate::planet::CelestialMass;
 use crate::trajectory::{
     RecalculateTrajectory, SimulatorSettings, SimulatorState,
     TrajectorySimulator,
@@ -27,7 +27,7 @@ pub fn render(
     mut simulator_state: ResMut<SimulatorState>,
     mut state: ResMut<State>,
     mut epoch: ResMut<Epoch>,
-    mut planets: Query<(&mut Planet, &mut PlanetMass, &Name)>,
+    mut planets: Query<(&mut CelestialBody, &mut CelestialMass, &Name)>,
     mut camera: Query<&mut OrbitCameraController>,
     camera_transform: Query<&GlobalTransform, With<OrbitCameraController>>,
 ) {

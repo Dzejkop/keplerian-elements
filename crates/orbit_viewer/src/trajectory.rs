@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use keplerian_elements::{astro, StateVectors};
 
-use crate::planet::{Planet, PlanetMass, PlanetParent};
+use crate::planet::{CelestialBody, CelestialMass, CelestialParent};
 use crate::Epoch;
 
 #[derive(Debug, Clone, Copy, Default, Event)]
@@ -46,7 +46,12 @@ pub struct TrajectorySegment {
 
 pub fn recalculate(
     epoch: Res<Epoch>,
-    planets: Query<(Entity, &Planet, &PlanetMass, Option<&PlanetParent>)>,
+    planets: Query<(
+        Entity,
+        &CelestialBody,
+        &CelestialMass,
+        Option<&CelestialParent>,
+    )>,
     mut trajectory_simulator: ResMut<TrajectorySimulator>,
     _settings: Res<SimulatorSettings>,
     mut recalculate_event_reader: EventReader<RecalculateTrajectory>,
@@ -81,7 +86,12 @@ pub fn recalculate(
 
 fn find_soi_at_position(
     starting_sv: &StateVectors,
-    planets: &Query<(Entity, &Planet, &PlanetMass, Option<&PlanetParent>)>,
+    planets: &Query<(
+        Entity,
+        &CelestialBody,
+        &CelestialMass,
+        Option<&CelestialParent>,
+    )>,
 ) -> Entity {
     let mut soi_parent = None;
     let mut d = f32::MAX;

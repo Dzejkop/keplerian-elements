@@ -3,7 +3,7 @@ use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use keplerian_elements::KeplerianElements;
-use planet::{Planet, PlanetMass, PlanetParent};
+use planet::{CelestialBody, CelestialMass, CelestialParent, CelestialRadius};
 use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
@@ -65,7 +65,6 @@ struct State {
     draw_axis: bool,
     axis_scale: f32,
 
-    scale_scaling: f32,
     distance_scaling: f32,
     velocity_scaling: f32,
     focus_mode: FocusMode,
@@ -109,9 +108,8 @@ fn setup(
         draw_soi: true,
         draw_axis: true,
         axis_scale: 10000.0,
-        scale_scaling: 1e-28,
         distance_scaling: 1e-6,
-        velocity_scaling: 1e11,
+        velocity_scaling: 1e3,
         focus_mode: FocusMode::Sun,
     });
 
@@ -167,8 +165,9 @@ fn spawn_kerbol_system(
             material: star_material(Color::YELLOW),
             ..Default::default()
         })
-        .insert(Planet::default())
-        .insert(PlanetMass(kerbol_mass))
+        .insert(CelestialBody::default())
+        .insert(CelestialMass(kerbol_mass))
+        .insert(CelestialRadius(261_600_000.0))
         .insert(NotShadowCaster)
         .insert(Star)
         .insert(Name::new("Kerbol"))
@@ -200,7 +199,7 @@ fn spawn_kerbol_system(
             material: planet_material(Color::RED),
             ..Default::default()
         })
-        .insert(Planet::from_elements(
+        .insert(CelestialBody::from_elements(
             KeplerianElements {
                 semi_major_axis: 13_599_840_256.0,
                 eccentricity: 0.0,
@@ -213,8 +212,9 @@ fn spawn_kerbol_system(
             kerbol_mass,
             BASE_TOLERANCE,
         ))
-        .insert(PlanetMass(kerbin_mass))
-        .insert(PlanetParent(kerbol))
+        .insert(CelestialMass(kerbin_mass))
+        .insert(CelestialParent(kerbol))
+        .insert(CelestialRadius(600_000.0))
         .insert(Name::new("Kerbin"))
         .id();
 
@@ -224,7 +224,7 @@ fn spawn_kerbol_system(
             material: planet_material(Color::BLUE),
             ..Default::default()
         })
-        .insert(Planet::from_elements(
+        .insert(CelestialBody::from_elements(
             KeplerianElements {
                 semi_major_axis: 12_000_000.0,
                 eccentricity: 0.0,
@@ -237,7 +237,8 @@ fn spawn_kerbol_system(
             kerbin_mass,
             BASE_TOLERANCE,
         ))
-        .insert(PlanetParent(kerbin))
-        .insert(PlanetMass(9.7599066e20))
+        .insert(CelestialParent(kerbin))
+        .insert(CelestialMass(9.7599066e20))
+        .insert(CelestialRadius(200_000.0))
         .insert(Name::new("Mun"));
 }

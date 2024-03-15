@@ -5,19 +5,23 @@ use keplerian_elements::utils::zup2yup;
 use keplerian_elements::StateVectors;
 
 use crate::debug_arrows::DebugArrows;
-use crate::planet::{PlanetMass, PlanetParent};
+use crate::planet::{CelestialMass, CelestialParent};
 use crate::trajectory::{
     SimulatorSettings, SimulatorState, TrajectorySimulator,
 };
-use crate::{Planet, State};
+use crate::{CelestialBody, State};
 
 const SOI_SEGMENTS: usize = 50;
 
 pub fn orbits(
     mut lines: Gizmos,
-    planets: Query<Entity, With<Planet>>,
-    planet_data: Query<(&Planet, &PlanetParent, &Handle<StandardMaterial>)>,
-    planet_masses: Query<&PlanetMass>,
+    planets: Query<Entity, With<CelestialBody>>,
+    planet_data: Query<(
+        &CelestialBody,
+        &CelestialParent,
+        &Handle<StandardMaterial>,
+    )>,
+    planet_masses: Query<&CelestialMass>,
     transforms: Query<&Transform>,
     materials: Res<Assets<StandardMaterial>>,
     state: Res<State>,
@@ -97,9 +101,9 @@ pub fn orbits(
 
 pub fn soi(
     mut lines: Gizmos,
-    planets: Query<(Entity, &Planet, &PlanetParent)>,
+    planets: Query<(Entity, &CelestialBody, &CelestialParent)>,
     transforms: Query<&Transform>,
-    planet_masses: Query<&PlanetMass>,
+    planet_masses: Query<&CelestialMass>,
     state: Res<State>,
     camera: Query<&GlobalTransform, With<Camera>>,
 ) {
@@ -164,8 +168,8 @@ pub fn axis(mut lines: Gizmos, state: Res<State>) {
 }
 
 pub fn trajectory(
-    planets: Query<&Planet>,
-    masses: Query<&PlanetMass>,
+    planets: Query<&CelestialBody>,
+    masses: Query<&CelestialMass>,
     state: Res<State>,
     mut gizmos: Gizmos,
     simulator_state: Res<SimulatorState>,

@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use keplerian_elements::utils::zup2yup;
 use smooth_bevy_cameras::LookTransform;
 
-use super::{FocusMode, Planet, State};
-use crate::planet::{PlanetMass, PlanetParent};
+use super::{CelestialBody, FocusMode, State};
+use crate::planet::{CelestialMass, CelestialParent, CelestialRadius};
 use crate::Epoch;
 
 pub fn epoch(time: Res<Time>, mut epoch: ResMut<Epoch>, state: Res<State>) {
@@ -13,11 +13,11 @@ pub fn epoch(time: Res<Time>, mut epoch: ResMut<Epoch>, state: Res<State>) {
 }
 
 pub fn planets(
-    planet_entities: Query<Entity, With<Planet>>,
-    mut planets: Query<&mut Planet>,
+    planet_entities: Query<Entity, With<CelestialBody>>,
+    mut planets: Query<&mut CelestialBody>,
     mut transforms: Query<&mut Transform>,
-    parents: Query<&PlanetParent>,
-    planet_masses: Query<&PlanetMass>,
+    parents: Query<&CelestialParent>,
+    planet_masses: Query<&CelestialMass>,
     state: Res<State>,
     epoch: Res<Epoch>,
 ) {
@@ -68,17 +68,17 @@ pub fn planets(
 
 pub fn planet_scale(
     state: Res<State>,
-    mut items: Query<(&mut Transform, &PlanetMass)>,
+    mut items: Query<(&mut Transform, &CelestialRadius)>,
 ) {
-    for (mut transform, mass) in items.iter_mut() {
-        transform.scale = Vec3::ONE * mass.0 * state.scale_scaling;
+    for (mut transform, radius) in items.iter_mut() {
+        transform.scale = Vec3::ONE * radius.0 * state.distance_scaling;
     }
 }
 
 pub fn camera_focus(
     mut look_transform: Query<&mut LookTransform>,
     state: Res<State>,
-    planets: Query<(&GlobalTransform, &Name), With<Planet>>,
+    planets: Query<(&GlobalTransform, &Name), With<CelestialBody>>,
 ) {
     let mut look = look_transform.single_mut();
 
