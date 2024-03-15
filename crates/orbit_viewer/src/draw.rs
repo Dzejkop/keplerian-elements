@@ -15,7 +15,6 @@ const SOI_SEGMENTS: usize = 50;
 
 pub fn orbits(
     mut lines: Gizmos,
-    names: Query<&Name>,
     planets: Query<Entity, With<Planet>>,
     planet_data: Query<(&Planet, &PlanetParent, &Handle<StandardMaterial>)>,
     planet_masses: Query<&PlanetMass>,

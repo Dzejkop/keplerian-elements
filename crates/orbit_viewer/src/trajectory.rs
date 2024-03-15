@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use keplerian_elements::{astro, StateVectors};
 
 use crate::planet::{Planet, PlanetMass, PlanetParent};
-use crate::{Epoch, State};
+use crate::Epoch;
 
 #[derive(Debug, Clone, Copy, Default, Event)]
 pub struct RecalculateTrajectory;
@@ -45,7 +45,6 @@ pub struct TrajectorySegment {
 }
 
 pub fn recalculate(
-    state: Res<State>,
     epoch: Res<Epoch>,
     planets: Query<(Entity, &Planet, &PlanetMass, Option<&PlanetParent>)>,
     mut trajectory_simulator: ResMut<TrajectorySimulator>,
@@ -62,7 +61,7 @@ pub fn recalculate(
         trajectory_simulator.velocity,
     );
 
-    let parent = find_soi_at_position(&starting_sv, &state, &planets);
+    let parent = find_soi_at_position(&starting_sv, &planets);
 
     trajectory_simulator.segments.clear();
 
@@ -82,7 +81,6 @@ pub fn recalculate(
 
 fn find_soi_at_position(
     starting_sv: &StateVectors,
-    state: &Res<State>,
     planets: &Query<(Entity, &Planet, &PlanetMass, Option<&PlanetParent>)>,
 ) -> Entity {
     let mut soi_parent = None;
@@ -118,6 +116,7 @@ fn find_soi_at_position(
         let new_d = (real_soi_center - starting_sv.position).length();
         if new_d < soi && new_d < d {
             soi_parent = Some(entity);
+            d = new_d;
         }
     }
 
