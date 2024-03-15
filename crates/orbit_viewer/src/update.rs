@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use keplerian_elements::utils::zup2yup;
 use smooth_bevy_cameras::LookTransform;
 
-use super::{mass2radius, FocusMode, Planet, Star, State};
+use super::{FocusMode, Planet, State};
 use crate::planet::{PlanetMass, PlanetParent};
 use crate::Epoch;
 
@@ -21,40 +21,35 @@ pub fn planets(
     state: Res<State>,
     epoch: Res<Epoch>,
 ) {
+    if !state.update_epoch {
+        return;
+    }
+
     for entity in planet_entities.iter() {
         let Ok(parent) = parents.get(entity) else {
-            warn!("Planet has not parent component");
             continue;
         };
 
         let Ok(mut planet) = planets.get_mut(entity) else {
-            error!("Planet has not planet component");
             continue;
         };
 
         let dt = epoch.0 - planet.last_update_epoch;
-        let central_mass = if let Some(parent) = parent.0 {
-            planet_masses.get(parent).unwrap().0
-        } else {
-            state.star_mass
-        };
 
-        let offset = if let Some(parent) = parent.0 {
+        let central_mass = planet_masses.get(parent.0).unwrap().0;
+
+        let offset = {
             let transform = transforms
-                .get(parent)
+                .get(parent.0)
                 .expect("Parent planet does not exist");
 
             transform.translation
-        } else {
-            Vec3::ZERO
         };
 
         let Ok(mut transform) = transforms.get_mut(entity) else {
             warn!("Planet has no transform component");
             continue;
         };
-
-        let planet_mass = planet_masses.get(entity).unwrap().0;
 
         planet.state_vectors = planet.state_vectors.propagate_kepler(
             dt,
@@ -65,16 +60,18 @@ pub fn planets(
 
         let position = zup2yup(planet.state_vectors.position);
 
-        transform.translation = offset + position * state.distance_scaling;
-        transform.scale =
-            Vec3::ONE * 0.1 * mass2radius(state.as_ref(), planet_mass);
+        let new_translation = offset + position * state.distance_scaling;
+
+        transform.translation = new_translation;
     }
 }
 
-pub fn star(mut query: Query<&mut Transform, With<Star>>, state: Res<State>) {
-    for mut transform in query.iter_mut() {
-        transform.scale =
-            Vec3::ONE * mass2radius(state.as_ref(), state.star_mass);
+pub fn planet_scale(
+    state: Res<State>,
+    mut items: Query<(&mut Transform, &PlanetMass)>,
+) {
+    for (mut transform, mass) in items.iter_mut() {
+        transform.scale = Vec3::ONE * mass.0 * state.scale_scaling;
     }
 }
 

@@ -41,13 +41,13 @@ pub struct TrajectorySegment {
     // State vectors at the entrypoint
     pub entry_sv: StateVectors,
     // Parent of the given segment
-    pub parent: Option<Entity>,
+    pub parent: Entity,
 }
 
 pub fn recalculate(
     state: Res<State>,
     epoch: Res<Epoch>,
-    planets: Query<(Entity, &Planet, &PlanetMass, &PlanetParent)>,
+    planets: Query<(Entity, &Planet, &PlanetMass, Option<&PlanetParent>)>,
     mut trajectory_simulator: ResMut<TrajectorySimulator>,
     _settings: Res<SimulatorSettings>,
     mut recalculate_event_reader: EventReader<RecalculateTrajectory>,
@@ -62,7 +62,7 @@ pub fn recalculate(
         trajectory_simulator.velocity,
     );
 
-    let parent = find_parent(&starting_sv, &state, &planets);
+    let parent = find_soi_at_position(&starting_sv, &state, &planets);
 
     trajectory_simulator.segments.clear();
 
@@ -80,25 +80,32 @@ pub fn recalculate(
     //      c)
 }
 
-fn find_parent(
+fn find_soi_at_position(
     starting_sv: &StateVectors,
     state: &Res<State>,
-    planets: &Query<(Entity, &Planet, &PlanetMass, &PlanetParent)>,
-) -> Option<Entity> {
+    planets: &Query<(Entity, &Planet, &PlanetMass, Option<&PlanetParent>)>,
+) -> Entity {
+    let mut soi_parent = None;
+    let mut d = f32::MAX;
+
     for (entity, planet, mass, parent) in planets.iter() {
-        let central_mass = if let Some(parent) = parent.0 {
-            planets.get(parent).expect("No mass for parent").2 .0
-        } else {
-            state.star_mass
+        let Some(parent) = parent else {
+            // No parent indicates the central star
+            // in this case we set the entity
+            // but keep the distance as f32::MAX
+            soi_parent = Some(entity);
+
+            continue;
         };
 
-        let offset = if let Some(parent) = parent.0 {
+        let central_mass =
+            planets.get(parent.0).expect("No mass for parent").2 .0;
+
+        let offset = {
             let (_, parent_planet, _, _) =
-                planets.get(parent).expect("Parent planet does not exist");
+                planets.get(parent.0).expect("Parent planet does not exist");
 
             parent_planet.state_vectors.position
-        } else {
-            Vec3::ZERO
         };
 
         let real_soi_center = planet.state_vectors.position + offset;
@@ -108,11 +115,11 @@ fn find_parent(
             central_mass,
         );
 
-        let d = (real_soi_center - starting_sv.position).length();
-        if d < soi {
-            return Some(entity);
+        let new_d = (real_soi_center - starting_sv.position).length();
+        if new_d < soi && new_d < d {
+            soi_parent = Some(entity);
         }
     }
 
-    None
+    soi_parent.expect("Found no parent entity!")
 }

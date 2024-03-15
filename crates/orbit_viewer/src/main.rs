@@ -2,18 +2,15 @@ use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use keplerian_elements::constants::AU;
 use keplerian_elements::KeplerianElements;
-use planet::{Planet, PlanetBundle};
+use planet::{Planet, PlanetMass, PlanetParent};
 use smooth_bevy_cameras::controllers::orbit::{
     OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 use trajectory::RecalculateTrajectory;
 
-const USE_REAL_SOLAR_SYSTEM: bool = false;
 const BASE_TOLERANCE: f32 = 0.01;
-const STAR_MASS: f32 = 	1.7565459e28;
 
 mod debug_arrows;
 mod draw;
@@ -35,7 +32,7 @@ fn main() {
         .add_systems(Update, ui::simulator_settings_window)
         .add_systems(Update, update::epoch)
         .add_systems(Update, update::planets)
-        .add_systems(Update, update::star)
+        .add_systems(Update, update::planet_scale)
         .add_systems(Update, update::camera_focus)
         .add_systems(Update, draw::orbits)
         .add_systems(Update, draw::axis)
@@ -51,10 +48,10 @@ fn main() {
 
 #[derive(Resource)]
 struct State {
-    star_mass: f32,
     tolerance: f32,
 
     update_epoch: bool,
+    update_planets: bool,
     epoch_scale: f32,
 
     draw_orbits: bool,
@@ -68,6 +65,7 @@ struct State {
     draw_axis: bool,
     axis_scale: f32,
 
+    scale_scaling: f32,
     distance_scaling: f32,
     velocity_scaling: f32,
     focus_mode: FocusMode,
@@ -100,10 +98,9 @@ fn setup(
 
     commands.insert_resource(State {
         tolerance: BASE_TOLERANCE,
-        // Sun Mass
-        star_mass: STAR_MASS,
-        epoch_scale: 1000.0,
+        epoch_scale: 1.0,
         update_epoch: true,
+        update_planets: true,
         draw_orbits: true,
         orbit_subdivisions: 100,
         show_nodes: false,
@@ -112,6 +109,7 @@ fn setup(
         draw_soi: true,
         draw_axis: true,
         axis_scale: 10000.0,
+        scale_scaling: 1e-28,
         distance_scaling: 1e-6,
         velocity_scaling: 1e11,
         focus_mode: FocusMode::Sun,
@@ -128,37 +126,7 @@ fn setup(
         .unwrap(),
     );
 
-    let star_material = materials.add(StandardMaterial {
-        emissive: Color::YELLOW * 100.0,
-        ..Default::default()
-    });
-
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
-            intensity: 100000.0,
-            range: 100000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        ..default()
-    });
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: star_material,
-            transform: Transform::from_scale(Vec3::ONE * 1.0),
-
-            ..Default::default()
-        })
-        .insert(NotShadowCaster)
-        .insert(Star);
-
-    if USE_REAL_SOLAR_SYSTEM {
-        spawn_solar_system(&mut commands, sphere, materials.as_mut());
-    } else {
-        spawn_test_system(&mut commands, sphere, materials.as_mut());
-    }
+    spawn_kerbol_system(&mut commands, sphere, materials.as_mut());
 
     commands
         .spawn(Camera3dBundle::default())
@@ -178,11 +146,44 @@ fn setup(
         ));
 }
 
-fn spawn_test_system(
+fn spawn_kerbol_system(
     commands: &mut Commands,
     sphere: Handle<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) {
+    let mut star_material = |color: Color| {
+        materials.add(StandardMaterial {
+            base_color: color,
+            emissive: color * 100.0,
+            unlit: true,
+            ..Default::default()
+        })
+    };
+
+    let kerbol_mass = 1.756546e28;
+    let kerbol = commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: star_material(Color::YELLOW),
+            ..Default::default()
+        })
+        .insert(Planet::default())
+        .insert(PlanetMass(kerbol_mass))
+        .insert(NotShadowCaster)
+        .insert(Star)
+        .insert(Name::new("Kerbol"))
+        .id();
+
+    commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            intensity: 100000.0,
+            range: 100000.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        ..default()
+    });
+
     let mut planet_material = |color: Color| {
         materials.add(StandardMaterial {
             base_color: color,
@@ -199,7 +200,7 @@ fn spawn_test_system(
             material: planet_material(Color::RED),
             ..Default::default()
         })
-        .insert(PlanetBundle::new_from_orbit(
+        .insert(Planet::from_elements(
             KeplerianElements {
                 semi_major_axis: 13_599_840_256.0,
                 eccentricity: 0.0,
@@ -209,10 +210,11 @@ fn spawn_test_system(
                 mean_anomaly_at_epoch: 3.14,
                 epoch: 0.0, // Example epoch year
             },
-            kerbin_mass,
-            STAR_MASS,
+            kerbol_mass,
             BASE_TOLERANCE,
         ))
+        .insert(PlanetMass(kerbin_mass))
+        .insert(PlanetParent(kerbol))
         .insert(Name::new("Kerbin"))
         .id();
 
@@ -222,221 +224,20 @@ fn spawn_test_system(
             material: planet_material(Color::BLUE),
             ..Default::default()
         })
-        .insert(
-            PlanetBundle::builder(
-                KeplerianElements {
-                    semi_major_axis: 12_000_000.0,
-                    eccentricity: 0.0,
-                    inclination: 0.0,
-                    right_ascension_of_the_ascending_node: 0.0,
-                    argument_of_periapsis: 0.0,
-                    mean_anomaly_at_epoch: 1.7,
-                    epoch: 0.0, // Example epoch year
-                },
-                9.7599066e20,
-            )
-            .with_parent(kerbin)
-            .build(kerbin_mass, BASE_TOLERANCE),
-        )
-        .insert(Name::new("Mun"));
-}
-
-fn spawn_solar_system(
-    commands: &mut Commands,
-    sphere: Handle<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) {
-    let mut planet_material = |color: Color| {
-        materials.add(StandardMaterial {
-            base_color: color,
-            emissive: color,
-            perceptual_roughness: 1.0,
-            ..Default::default()
-        })
-    };
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::BEIGE),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
+        .insert(Planet::from_elements(
             KeplerianElements {
-                semi_major_axis: 0.38709927 * AU,
-                eccentricity: 0.20563593,
-                inclination: 0.12,
-                right_ascension_of_the_ascending_node: 0.84,
-                argument_of_periapsis: 1.35,
-                mean_anomaly_at_epoch: 4.40,
+                semi_major_axis: 12_000_000.0,
+                eccentricity: 0.0,
+                inclination: 0.0,
+                right_ascension_of_the_ascending_node: 0.0,
+                argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch: 1.7,
                 epoch: 0.0, // Example epoch year
             },
-            3.285,
-            STAR_MASS,
+            kerbin_mass,
             BASE_TOLERANCE,
         ))
-        .insert(Name::new("Mercury"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::ORANGE),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                semi_major_axis: 0.7233 * AU,
-                eccentricity: 0.00676,
-                inclination: 0.0593,
-                right_ascension_of_the_ascending_node: 1.34,
-                argument_of_periapsis: 2.30,
-                mean_anomaly_at_epoch: 3.17,
-                epoch: 0.0,
-            },
-            4.867e1,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Venus"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::BLUE),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                eccentricity: 0.01673,
-                semi_major_axis: 1.0000 * AU,
-                inclination: 0.01,
-                right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 1.7964674,
-                mean_anomaly_at_epoch: 0.0,
-                epoch: 0.0,
-            },
-            5.972e1,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Earth"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::RED),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                eccentricity: 0.09339410,
-                semi_major_axis: 1.52371034 * AU,
-                inclination: 0.03232349774693498376462675303241,
-                right_ascension_of_the_ascending_node:
-                    0.86760317116638123268876668101569,
-                argument_of_periapsis: 5.8657025501025428421251399347365,
-                mean_anomaly_at_epoch: 6.2034237603634456152598740984391,
-                epoch: 0.0,
-            },
-            0.642,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Mars"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::GREEN),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                eccentricity: 0.04854,
-                semi_major_axis: 5.2025 * AU,
-                inclination: 0.02267182698340634120423874308267,
-                right_ascension_of_the_ascending_node:
-                    1.7503907068251131326967694717172,
-                argument_of_periapsis: 0.24905848425959083062701067266333,
-                mean_anomaly_at_epoch: 0.59917153220965334375790304082214,
-                epoch: 0.0,
-            },
-            1.898e4,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Jupiter"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::YELLOW_GREEN),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                eccentricity: 0.05551,
-                semi_major_axis: 9.5415 * AU,
-                inclination: 0.04352851154473857964847684776611,
-                right_ascension_of_the_ascending_node:
-                    1.9833921619663561312160821893105,
-                argument_of_periapsis: 1.6207127434019344451313392476185,
-                mean_anomaly_at_epoch: 0.8740608893987602521233843368591,
-                epoch: 0.0,
-            },
-            5.683e3,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Saturn"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::ALICE_BLUE),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                eccentricity: 0.04686,
-                semi_major_axis: 19.188 * AU,
-                inclination: 0.01349139511791616762962012964042,
-                right_ascension_of_the_ascending_node:
-                    1.2908455147750061550927616923742,
-                argument_of_periapsis: 3.0094712292138224894895199921049,
-                mean_anomaly_at_epoch: 5.4838245097661835306942363945912,
-                epoch: 0.0,
-            },
-            8.681e2,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Uranus"));
-
-    commands
-        .spawn(PbrBundle {
-            mesh: sphere.clone(),
-            material: planet_material(Color::MIDNIGHT_BLUE),
-            ..Default::default()
-        })
-        .insert(PlanetBundle::new_from_orbit(
-            KeplerianElements {
-                eccentricity: 0.00895,
-                semi_major_axis: 30.070 * AU,
-                inclination: 0.03089232776029963351154932660225,
-                right_ascension_of_the_ascending_node:
-                    2.3001694212033269494277320637911,
-                argument_of_periapsis: 0.81471969483095304650797885073048,
-                mean_anomaly_at_epoch: 5.3096406504171494389172520558961,
-                epoch: 0.0,
-            },
-            1.024e3,
-            STAR_MASS,
-            BASE_TOLERANCE,
-        ))
-        .insert(Name::new("Neptune"));
-}
-
-fn mass2radius(state: &State, mass: f32) -> f32 {
-    mass * state.distance_scaling * 1e-20
+        .insert(PlanetParent(kerbin))
+        .insert(PlanetMass(9.7599066e20))
+        .insert(Name::new("Mun"));
 }

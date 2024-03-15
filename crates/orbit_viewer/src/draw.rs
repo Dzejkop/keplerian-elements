@@ -15,6 +15,7 @@ const SOI_SEGMENTS: usize = 50;
 
 pub fn orbits(
     mut lines: Gizmos,
+    names: Query<&Name>,
     planets: Query<Entity, With<Planet>>,
     planet_data: Query<(&Planet, &PlanetParent, &Handle<StandardMaterial>)>,
     planet_masses: Query<&PlanetMass>,
@@ -32,26 +33,20 @@ pub fn orbits(
 
     for planet_entity in planets.iter() {
         let Ok((planet, parent, mat)) = planet_data.get(planet_entity) else {
-            warn!("Planet missing planet data");
             continue;
         };
 
-        let central_mass = if let Some(parent) = parent.0 {
-            planet_masses.get(parent).expect("No mass for parent").0
-        } else {
-            state.star_mass
-        };
+        let central_mass =
+            planet_masses.get(parent.0).expect("Missing parent").0;
 
         let color = materials.get(mat).unwrap().base_color;
 
-        let offset = if let Some(parent) = parent.0 {
+        let offset = {
             let transform = transforms
-                .get(parent)
+                .get(parent.0)
                 .expect("Parent planet does not exist");
 
             transform.translation
-        } else {
-            Vec3::ZERO
         };
 
         let first_position = offset
@@ -98,35 +93,6 @@ pub fn orbits(
             debug_arrows.draw_arrow(Vec3::ZERO, p, color);
             debug_arrows.draw_arrow(p, p + v, Color::RED);
         }
-
-        let orbit = planet.orbit;
-        if state.show_nodes {
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.ascending_node(central_mass))
-                    * state.distance_scaling,
-                Color::YELLOW_GREEN,
-            );
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.descending_node(central_mass))
-                    * state.distance_scaling,
-                Color::YELLOW,
-            );
-        }
-
-        if state.show_peri_and_apo_apsis {
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.periapsis(central_mass)) * state.distance_scaling,
-                Color::WHITE,
-            );
-            debug_arrows.draw_arrow(
-                Vec3::ZERO,
-                zup2yup(orbit.apoapsis(central_mass)) * state.distance_scaling,
-                Color::WHITE,
-            );
-        }
     }
 }
 
@@ -149,21 +115,16 @@ pub fn soi(
     for (entity, planet, parent) in planets.iter() {
         let r = planet.state_vectors.position.length();
 
-        let central_mass = if let Some(parent) = parent.0 {
-            planet_masses.get(parent).unwrap().0
-        } else {
-            state.star_mass
-        };
+        let central_mass = planet_masses.get(parent.0).unwrap().0;
+
         let mass = planet_masses.get(entity).unwrap();
 
-        let offset = if let Some(parent) = parent.0 {
+        let offset = {
             let transform = transforms
-                .get(parent)
+                .get(parent.0)
                 .expect("Parent planet does not exist");
 
             transform.translation
-        } else {
-            Vec3::ZERO
         };
 
         let soi = keplerian_elements::astro::soi(r, mass.0, central_mass)
@@ -257,27 +218,18 @@ pub fn trajectory(
         for i in 0..=simulator_settings.max_steps {
             let t = i as f32 * simulator_settings.step;
 
-            let central_mass = if let Some(parent) = segment.parent {
-                masses.get(parent).unwrap().0
-            } else {
-                state.star_mass
-            };
+            let central_mass = masses.get(segment.parent).unwrap().0;
 
-            let offset = if let Some(parent) = segment.parent {
-                let planet = planets.get(parent).unwrap();
+            let offset = {
+                let planet = planets.get(segment.parent).unwrap();
                 planet.state_vectors.position
-            } else {
-                Vec3::ZERO
             };
 
             let mut entry_sv = segment.entry_sv.clone();
             entry_sv.position -= offset; // Move to the orbital frame
 
-            let sv = entry_sv.try_propagate_kepler(
-                t,
-                central_mass,
-                state.tolerance,
-            );
+            let sv =
+                entry_sv.try_propagate_kepler(t, central_mass, state.tolerance);
 
             let sv = match sv {
                 Some(sv) => sv,
@@ -287,7 +239,8 @@ pub fn trajectory(
                 }
             };
 
-            let next_pos = zup2yup(sv.position + offset) * state.distance_scaling;
+            let next_pos =
+                zup2yup(sv.position + offset) * state.distance_scaling;
 
             gizmos.line(pos, next_pos, Color::WHITE);
 

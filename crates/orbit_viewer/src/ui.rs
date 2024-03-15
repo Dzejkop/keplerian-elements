@@ -10,7 +10,7 @@ use crate::trajectory::{
     RecalculateTrajectory, SimulatorSettings, SimulatorState,
     TrajectorySimulator,
 };
-use crate::{mass2radius, Epoch};
+use crate::Epoch;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct UiState {
@@ -124,19 +124,6 @@ pub fn render(
             if ui.button("Focus").clicked() {
                 state.focus_mode = FocusMode::Planet(name.to_string());
             }
-
-            ui.label("Readouts:");
-
-            let r = planet.state_vectors.position.length();
-            let soi = keplerian_elements::astro::soi(
-                r,
-                planet_mass.0,
-                state.star_mass,
-            );
-            ui.label(format!("SOI: {soi}"));
-
-            let radius = mass2radius(state.as_ref(), planet_mass.0);
-            ui.label(format!("Radius: {radius}"));
         }
     });
 
@@ -144,6 +131,8 @@ pub fn render(
         .open(&mut ui_state.settings_visible)
         .show(ctx, |ui| {
             ui.heading("State");
+            ui.checkbox(&mut state.update_planets, "Update Planets");
+
             value_slider_min_max(
                 ui,
                 "Tolerance",
@@ -151,7 +140,6 @@ pub fn render(
                 f32::EPSILON,
                 100.0,
             );
-            value_slider(ui, "Mass", &mut state.star_mass);
             value_slider(ui, "Epoch", &mut epoch.0);
             value_slider(ui, "Epoch scale", &mut state.epoch_scale);
             ui.checkbox(&mut state.update_epoch, "Update Epoch");
