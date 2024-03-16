@@ -220,7 +220,6 @@ impl StateVectors {
         };
 
         if ret.position.is_nan() || ret.velocity.is_nan() {
-            eprintln!("propagate_kepler({self:?}, {dt}, {mass}, {tolerance}) -> {ret:?}");
             None
         } else {
             Some(ret)
@@ -238,9 +237,21 @@ impl StateVectors {
         if let Some(result) = result {
             result
         } else {
-            eprintln!("propagate_kepler({self:?}, {dt}, {mass}, {tolerance}) -> {result:?}");
-            panic!("Kepler propagation failed");
+            panic!("Kepler propagation failed, params: propagate_kepler({:?}, {}, {}, {})", self, dt, mass, tolerance);
         }
+    }
+
+    fn calculate_eccentricity_vector(&self, central_mass: Num) -> Vec3 {
+        let μ = standard_gravitational_parameter(central_mass);
+        let v_squared = self.velocity.length_squared();
+        let r_mag = self.position.length();
+        let first_term = (v_squared - μ / r_mag) * self.position;
+        let second_term = (self.position.dot(self.velocity)) * self.velocity;
+        (first_term - second_term) / μ
+    }
+
+    pub fn eccentricity(&self, central_mass: Num) -> Num {
+        self.calculate_eccentricity_vector(central_mass).length()
     }
 }
 

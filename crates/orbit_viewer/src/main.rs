@@ -34,7 +34,9 @@ fn main() {
         .add_systems(Update, update::planets)
         .add_systems(Update, update::planet_scale)
         .add_systems(Update, update::camera_focus)
-        .add_systems(Update, draw::orbits)
+        .add_systems(Update, draw::elliptic_orbits)
+        .add_systems(Update, draw::eccentric_orbits)
+        .add_systems(Update, draw::position_and_velocity)
         .add_systems(Update, draw::axis)
         .add_systems(Update, draw::soi)
         .add_systems(Update, draw::trajectory)
@@ -108,8 +110,8 @@ fn setup(
         draw_soi: true,
         draw_axis: true,
         axis_scale: 10000.0,
-        distance_scaling: 1e-6,
-        velocity_scaling: 1e3,
+        distance_scaling: 1e-9,
+        velocity_scaling: 1e6,
         focus_mode: FocusMode::Sun,
     });
 

@@ -1,11 +1,12 @@
 use bevy::prelude::*;
 use bevy_egui::egui::{ComboBox, DragValue, Ui};
 use bevy_egui::{egui, EguiContexts};
+use keplerian_elements::astro;
 use keplerian_elements::utils::{yup2zup, zup2yup};
 use smooth_bevy_cameras::controllers::orbit::OrbitCameraController;
 
 use super::{CelestialBody, FocusMode, State};
-use crate::planet::CelestialMass;
+use crate::planet::{CelestialMass, CelestialParent};
 use crate::trajectory::{
     RecalculateTrajectory, SimulatorSettings, SimulatorState,
     TrajectorySimulator,
@@ -27,7 +28,9 @@ pub fn render(
     mut simulator_state: ResMut<SimulatorState>,
     mut state: ResMut<State>,
     mut epoch: ResMut<Epoch>,
-    mut planets: Query<(&mut CelestialBody, &mut CelestialMass, &Name)>,
+    mut planets: Query<(Entity, &mut CelestialBody, &Name)>,
+    planet_parent: Query<&CelestialParent>,
+    mut masses: Query<&mut CelestialMass>,
     mut camera: Query<&mut OrbitCameraController>,
     camera_transform: Query<&GlobalTransform, With<OrbitCameraController>>,
 ) {
@@ -74,7 +77,7 @@ pub fn render(
 
     egui::SidePanel::left("Left").show(ctx, |ui| {
         ui.heading("Planets:");
-        for (idx, (_planet, _mass, name)) in planets.iter().enumerate() {
+        for (idx, (_entity, _planet, name)) in planets.iter().enumerate() {
             let selected = ui_state.selected_planet == Some(idx);
 
             if ui.selectable_label(selected, name.as_str()).clicked() {
@@ -89,15 +92,19 @@ pub fn render(
         ui.separator();
 
         if let Some(selected_idx) = ui_state.selected_planet {
-            let (_idx, (mut planet, mut planet_mass, name)) = planets
+            let (_idx, (entity, mut planet, name)) = planets
                 .iter_mut()
                 .enumerate()
                 .find(|(idx, _)| *idx == selected_idx)
                 .unwrap();
 
+            let mut planet_mass =
+                masses.get_mut(entity).expect("Planet missing mass");
+
             ui.heading(name.to_string());
 
             value_slider(ui, "Mass", &mut planet_mass.0);
+            let mass = planet_mass.0;
 
             // --- State Vectors ---
             let sv = &mut planet.state_vectors;
@@ -106,7 +113,6 @@ pub fn render(
 
             ui.label("Position");
             vec3_slider(ui, &mut p);
-            ui.label(format!("{:?}", sv.position));
 
             sv.position = yup2zup(p / state.distance_scaling);
 
@@ -123,6 +129,20 @@ pub fn render(
 
             if ui.button("Focus").clicked() {
                 state.focus_mode = FocusMode::Planet(name.to_string());
+            }
+
+            ui.label("Readouts");
+            let r = sv.position.length();
+            ui.text_edit_singleline(&mut format!("{:<16}: {:.2}", "R", r));
+
+            if let Some(parent) = planet_parent.get(entity).ok() {
+                let central_mass = masses.get(parent.0).unwrap().0;
+
+                let e = sv.eccentricity(central_mass);
+                ui.label(format!("{:<16}: {:.2}", "Eccentricity", e));
+
+                let soi = astro::soi(r, mass, central_mass);
+                ui.label(format!("{:<16}: {:.2}", "SOI", soi));
             }
         }
     });
@@ -175,9 +195,9 @@ pub fn render(
                 ui,
                 "Distance scaling",
                 &mut state.distance_scaling,
-                0.000001,
+                0.000000001,
                 1.0,
-                0.0000001,
+                0.0000000001,
             );
 
             value_slider(ui, "Velocity scaling", &mut state.velocity_scaling);
@@ -252,7 +272,7 @@ pub fn render(
                         state.focus_mode = FocusMode::Sun;
                     }
 
-                    for (_, _, name) in &planets {
+                    for (_entity, _, name) in &planets {
                         if ui
                             .selectable_label(
                                 current == name.to_string(),

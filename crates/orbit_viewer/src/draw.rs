@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use keplerian_elements::utils::zup2yup;
-use keplerian_elements::StateVectors;
+use keplerian_elements::{astro, StateVectors};
 
 use crate::debug_arrows::DebugArrows;
 use crate::planet::{CelestialMass, CelestialParent};
@@ -13,10 +13,9 @@ use crate::{CelestialBody, State};
 
 const SOI_SEGMENTS: usize = 50;
 
-pub fn orbits(
+pub fn elliptic_orbits(
     mut lines: Gizmos,
-    planets: Query<Entity, With<CelestialBody>>,
-    planet_data: Query<(
+    planets: Query<(
         &CelestialBody,
         &CelestialParent,
         &Handle<StandardMaterial>,
@@ -25,22 +24,19 @@ pub fn orbits(
     transforms: Query<&Transform>,
     materials: Res<Assets<StandardMaterial>>,
     state: Res<State>,
-    camera: Query<&GlobalTransform, With<Camera>>,
 ) {
     if !state.draw_orbits {
         return;
     }
 
-    let camera = camera.single();
-    let camera_position = camera.translation();
-
-    for planet_entity in planets.iter() {
-        let Ok((planet, parent, mat)) = planet_data.get(planet_entity) else {
-            continue;
-        };
-
+    for (planet, parent, mat) in planets.iter() {
         let central_mass =
             planet_masses.get(parent.0).expect("Missing parent").0;
+
+        let e = planet.state_vectors.eccentricity(central_mass);
+        if e >= 1.0 {
+            continue;
+        }
 
         let color = materials.get(mat).unwrap().base_color;
 
@@ -81,21 +77,149 @@ pub fn orbits(
 
         // Close the loop
         lines.line(prev_position, first_position, color);
+    }
+}
 
-        let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
+pub fn eccentric_orbits(
+    mut lines: Gizmos,
+    names: Query<&Name>,
+    planets: Query<(Entity, &CelestialBody, &Handle<StandardMaterial>)>,
+    planet_masses: Query<&CelestialMass>,
+    parents: Query<&CelestialParent>,
+    transforms: Query<&Transform>,
+    materials: Res<Assets<StandardMaterial>>,
+    state: Res<State>,
+) {
+    if !state.draw_orbits {
+        return;
+    }
 
-        if state.show_position_and_velocity {
-            let StateVectors { position, velocity } = planet.state_vectors;
+    for (entity, planet, mat) in planets.iter() {
+        let Some(parent) = parents.get(entity).ok() else {
+            continue;
+        };
 
-            let position = zup2yup(position);
-            let velocity = zup2yup(velocity);
+        let name = names.get(entity).unwrap().as_str();
+        let parent_name = names.get(parent.0).unwrap().as_str();
 
-            let p = position * state.distance_scaling;
-            let v = velocity * state.distance_scaling * state.velocity_scaling;
+        let central_mass =
+            planet_masses.get(parent.0).expect("Missing parent").0;
 
-            debug_arrows.draw_arrow(Vec3::ZERO, p, color);
-            debug_arrows.draw_arrow(p, p + v, Color::RED);
+        let super_central_mass = {
+            if let Some(parent_of_parent) = parents.get(parent.0).ok() {
+                Some(planet_masses.get(parent_of_parent.0).unwrap().0)
+            } else {
+                None
+            }
+        };
+
+        let e = planet.state_vectors.eccentricity(central_mass);
+        if e < 1.0 {
+            continue;
         }
+
+        let color = materials.get(mat).unwrap().base_color;
+
+        // Offset in render space
+        let offset = {
+            let transform = transforms
+                .get(parent.0)
+                .expect("Parent planet does not exist");
+
+            transform.translation
+        };
+
+        let mut current_sv = planet.state_vectors.clone();
+
+        let mut i = 0;
+        let soi = if let Some(super_central_mass) = super_central_mass {
+            astro::soi(
+                current_sv.position.length(),
+                central_mass,
+                super_central_mass,
+            )
+        } else {
+            1e12
+        };
+
+        let r = current_sv.position.length();
+
+        if r > soi {
+            info!(i, r, soi, name, parent_name, "SOI reached");
+            break;
+        }
+
+        let d_to_soi = soi - r;
+        let step = 1e-3 * d_to_soi / current_sv.velocity.length();
+        info!(r, soi, d_to_soi, step, "Step");
+
+        loop {
+            let new_sv = current_sv.propagate_kepler(
+                step,
+                central_mass,
+                state.tolerance,
+            );
+
+            let r = new_sv.position.length();
+
+            let soi = if let Some(super_central_mass) = super_central_mass {
+                astro::soi(
+                    new_sv.position.length(),
+                    central_mass,
+                    super_central_mass,
+                )
+            } else {
+                1e12
+            };
+
+            if r > soi {
+                info!(i, r, soi, name, parent_name, "SOI reached");
+                break;
+            }
+
+            let start =
+                offset + zup2yup(current_sv.position) * state.distance_scaling;
+            let end =
+                offset + zup2yup(new_sv.position) * state.distance_scaling;
+
+            lines.line(start, end, color);
+
+            current_sv = new_sv;
+
+            i += 1;
+        }
+    }
+}
+
+pub fn position_and_velocity(
+    mut lines: Gizmos,
+    planet_data: Query<(&CelestialBody, &Handle<StandardMaterial>)>,
+    materials: Res<Assets<StandardMaterial>>,
+    state: Res<State>,
+    camera: Query<&GlobalTransform, With<Camera>>,
+) {
+    if !state.show_position_and_velocity {
+        return;
+    }
+
+    let camera = camera.single();
+    let camera_position = camera.translation();
+
+    let mut debug_arrows = DebugArrows::new(&mut lines, camera_position);
+
+    for (planet, mat) in planet_data.iter() {
+        let color = materials.get(mat).unwrap().base_color;
+
+        let StateVectors { position, velocity } = planet.state_vectors;
+
+        let position = zup2yup(position);
+        let velocity = zup2yup(velocity);
+
+        let p = position * state.distance_scaling;
+        let v = velocity * state.distance_scaling * state.velocity_scaling;
+
+        debug_arrows.draw_arrow(Vec3::ZERO, p, color);
+        debug_arrows.draw_arrow(p, p + v, Color::RED);
     }
 }
 
