@@ -196,7 +196,7 @@ fn spawn_kerbol_system(
     let _moho = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
-            material: planet_material(Color::RED),
+            material: planet_material(Color::ORANGE),
             ..Default::default()
         })
         .insert(CelestialBody::from_elements(
@@ -204,8 +204,8 @@ fn spawn_kerbol_system(
                 semi_major_axis: 5_263_138_304.0,
                 eccentricity: 0.2,
                 inclination: f32::to_radians(7.0),
-                right_ascension_of_the_ascending_node: 70.0,
-                argument_of_periapsis: 15.0,
+                right_ascension_of_the_ascending_node: f32::to_radians(70.0),
+                argument_of_periapsis: f32::to_radians(15.0),
                 mean_anomaly_at_epoch: 3.14,
                 epoch: 0.0, // Example epoch year
             },
@@ -222,7 +222,7 @@ fn spawn_kerbol_system(
     let kerbin = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
-            material: planet_material(Color::RED),
+            material: planet_material(Color::GREEN),
             ..Default::default()
         })
         .insert(CelestialBody::from_elements(
@@ -247,7 +247,7 @@ fn spawn_kerbol_system(
     commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
-            material: planet_material(Color::BLUE),
+            material: planet_material(Color::GRAY),
             ..Default::default()
         })
         .insert(CelestialBody::from_elements(
@@ -271,16 +271,16 @@ fn spawn_kerbol_system(
     commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
-            material: planet_material(Color::BLUE),
+            material: planet_material(Color::PURPLE),
             ..Default::default()
         })
         .insert(CelestialBody::from_elements(
             KeplerianElements {
                 semi_major_axis: 47_000_000.0,
                 eccentricity: 0.0,
-                inclination: 6.0,
+                inclination: f32::to_radians(6.0),
                 right_ascension_of_the_ascending_node: 0.0,
-                argument_of_periapsis: 48.0,
+                argument_of_periapsis: f32::to_radians(48.0),
                 mean_anomaly_at_epoch: 0.9,
                 epoch: 0.0, // Example epoch year
             },
