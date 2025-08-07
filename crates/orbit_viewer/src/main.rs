@@ -218,7 +218,8 @@ fn spawn_kerbol_system(
         .insert(Name::new("Moho"))
         .id();
 
-    let _eve = commands
+    let eve_mass = 1.224398e23;
+    let eve = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
             material: planet_material(Color::PINK),
@@ -237,10 +238,35 @@ fn spawn_kerbol_system(
             kerbol_mass,
             BASE_TOLERANCE,
         ))
-        .insert(CelestialMass(1.224398e23))
+        .insert(CelestialMass(eve_mass))
         .insert(CelestialParent(kerbol))
         .insert(CelestialRadius(700_000.0))
         .insert(Name::new("Eve"))
+        .id();
+
+    let _gilly = commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::PURPLE),
+            ..Default::default()
+        })
+        .insert(CelestialBody::from_elements(
+            KeplerianElements {
+                semi_major_axis: 31_500_000.0,
+                eccentricity: 0.55,
+                inclination: f32::to_radians(12.0),
+                right_ascension_of_the_ascending_node: f32::to_radians(80.0),
+                argument_of_periapsis: f32::to_radians(10.0),
+                mean_anomaly_at_epoch: 0.9,
+                epoch: 0.0,
+            },
+            eve_mass,
+            BASE_TOLERANCE,
+        ))
+        .insert(CelestialMass(1.242e17))
+        .insert(CelestialParent(eve))
+        .insert(CelestialRadius(13_000.0))
+        .insert(Name::new("Gilly"))
         .id();
 
     let kerbin_mass = 5.2915158e22;
