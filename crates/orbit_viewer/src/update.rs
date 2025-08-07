@@ -16,6 +16,7 @@ pub fn planets_sys(
     planet_entities: Query<Entity, With<CelestialBody>>,
     mut planets: Query<&mut CelestialBody>,
     mut transforms: Query<&mut Transform>,
+    names: Query<&Name>,
     parents: Query<&CelestialParent>,
     planet_masses: Query<&CelestialMass>,
     state: Res<State>,
@@ -51,11 +52,15 @@ pub fn planets_sys(
             continue;
         };
 
-        planet.state_vectors = planet.state_vectors.propagate_kepler(
-            dt,
-            central_mass,
-            state.tolerance,
-        );
+        let name = names.get(entity).expect("missing planet name");
+
+        planet.state_vectors = planet
+            .state_vectors
+            .try_propagate_kepler(dt, central_mass, state.tolerance)
+            .unwrap_or_else(|| {
+                panic!("Failed to update the state vectors of {name}")
+            });
+
         planet.last_update_epoch = epoch.0;
 
         let position = zup2yup(planet.state_vectors.position);
