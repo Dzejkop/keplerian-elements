@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use keplerian_elements::utils::zup2yup;
-use keplerian_elements::{astro, StateVectors};
+use keplerian_elements::StateVectors;
 
 use crate::debug_arrows::DebugArrows;
 use crate::planet::{CelestialMass, CelestialParent};
@@ -13,7 +13,8 @@ use crate::{CelestialBody, State};
 
 const SOI_SEGMENTS: usize = 50;
 
-pub fn elliptic_orbits(
+pub fn orbits(
+    names: Query<&Name>,
     mut lines: Gizmos,
     planets: Query<(
         &CelestialBody,
@@ -35,6 +36,10 @@ pub fn elliptic_orbits(
 
         let e = planet.state_vectors.eccentricity(central_mass);
         if e >= 1.0 {
+            let name = names.get(parent.0).unwrap();
+
+            warn!("{} orbit is eccentric - skipping", name.as_str());
+
             continue;
         }
 
@@ -77,117 +82,6 @@ pub fn elliptic_orbits(
 
         // Close the loop
         lines.line(prev_position, first_position, color);
-    }
-}
-
-pub fn eccentric_orbits(
-    mut lines: Gizmos,
-    names: Query<&Name>,
-    planets: Query<(Entity, &CelestialBody, &Handle<StandardMaterial>)>,
-    planet_masses: Query<&CelestialMass>,
-    parents: Query<&CelestialParent>,
-    transforms: Query<&Transform>,
-    materials: Res<Assets<StandardMaterial>>,
-    state: Res<State>,
-) {
-    if !state.draw_orbits {
-        return;
-    }
-
-    for (entity, planet, mat) in planets.iter() {
-        let Some(parent) = parents.get(entity).ok() else {
-            continue;
-        };
-
-        let name = names.get(entity).unwrap().as_str();
-        let parent_name = names.get(parent.0).unwrap().as_str();
-
-        let central_mass =
-            planet_masses.get(parent.0).expect("Missing parent").0;
-
-        let super_central_mass = {
-            if let Some(parent_of_parent) = parents.get(parent.0).ok() {
-                Some(planet_masses.get(parent_of_parent.0).unwrap().0)
-            } else {
-                None
-            }
-        };
-
-        let e = planet.state_vectors.eccentricity(central_mass);
-        if e < 1.0 {
-            continue;
-        }
-
-        let color = materials.get(mat).unwrap().base_color;
-
-        // Offset in render space
-        let offset = {
-            let transform = transforms
-                .get(parent.0)
-                .expect("Parent planet does not exist");
-
-            transform.translation
-        };
-
-        let mut current_sv = planet.state_vectors.clone();
-
-        let mut i = 0;
-        let soi = if let Some(super_central_mass) = super_central_mass {
-            astro::soi(
-                current_sv.position.length(),
-                central_mass,
-                super_central_mass,
-            )
-        } else {
-            1e12
-        };
-
-        let r = current_sv.position.length();
-
-        if r > soi {
-            info!(i, r, soi, name, parent_name, "SOI reached");
-            break;
-        }
-
-        let d_to_soi = soi - r;
-        let step = 1e-3 * d_to_soi / current_sv.velocity.length();
-        info!(r, soi, d_to_soi, step, "Step");
-
-        loop {
-            let new_sv = current_sv.propagate_kepler(
-                step,
-                central_mass,
-                state.tolerance,
-            );
-
-            let r = new_sv.position.length();
-
-            let soi = if let Some(super_central_mass) = super_central_mass {
-                astro::soi(
-                    new_sv.position.length(),
-                    central_mass,
-                    super_central_mass,
-                )
-            } else {
-                1e12
-            };
-
-            if r > soi {
-                info!(i, r, soi, name, parent_name, "SOI reached");
-                break;
-            }
-
-            let start =
-                offset + zup2yup(current_sv.position) * state.distance_scaling;
-            let end =
-                offset + zup2yup(new_sv.position) * state.distance_scaling;
-
-            lines.line(start, end, color);
-
-            current_sv = new_sv;
-
-            i += 1;
-        }
     }
 }
 
@@ -337,22 +231,34 @@ pub fn trajectory(
     // Draw velocity
     debug_arrows.draw_arrow(origin, origin + v, Color::YELLOW_GREEN);
 
-    let segments = &simulator.segments;
-    for segment in segments {
-        let mut pos =
-            zup2yup(segment.entry_sv.position) * state.distance_scaling;
+    let Some((last_segment, segments)) = simulator.segments.split_last() else {
+        return;
+    };
 
+    for (_idx, _segment) in segments.iter().enumerate() {
+        // TODO: Draw intermediate segments
+    }
+
+    let mut pos =
+        zup2yup(last_segment.entry_sv.position) * state.distance_scaling;
+
+    let central_mass = masses
+        .get(last_segment.parent)
+        .expect("Missing mass of parent")
+        .0;
+
+    let e = last_segment.entry_sv.eccentricity(central_mass);
+
+    if e < 1.0 {
         for i in 0..=simulator_settings.max_steps {
             let t = i as f32 * simulator_settings.epoch_state;
 
-            let central_mass = masses.get(segment.parent).unwrap().0;
-
             let offset = {
-                let planet = planets.get(segment.parent).unwrap();
+                let planet = planets.get(last_segment.parent).unwrap();
                 planet.state_vectors.position
             };
 
-            let mut entry_sv = segment.entry_sv.clone();
+            let mut entry_sv = last_segment.entry_sv.clone();
             entry_sv.position -= offset; // Move to the orbital frame
 
             let sv =
@@ -373,5 +279,6 @@ pub fn trajectory(
 
             pos = next_pos;
         }
+    } else {
     }
 }

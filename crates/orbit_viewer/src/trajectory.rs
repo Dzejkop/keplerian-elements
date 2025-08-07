@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use keplerian_elements::{astro, StateVectors};
 
 use crate::planet::{CelestialBody, CelestialMass, CelestialParent};
-use crate::Epoch;
+use crate::{Epoch, State};
+
+const PERIOD_SAMPLES: usize = 500;
 
 #[derive(Debug, Clone, Copy, Default, Event)]
 pub struct RecalculateTrajectory;
@@ -16,6 +18,7 @@ pub struct SimulatorState {
 pub struct SimulatorSettings {
     pub epoch_state: f32,
     pub max_steps: usize,
+    pub auto_recalculate: bool,
 }
 
 impl Default for SimulatorSettings {
@@ -23,6 +26,7 @@ impl Default for SimulatorSettings {
         Self {
             epoch_state: 1000.00,
             max_steps: 1000,
+            auto_recalculate: false,
         }
     }
 }
@@ -45,6 +49,7 @@ pub struct TrajectorySegment {
 }
 
 pub fn recalculate(
+    state: Res<State>,
     epoch: Res<Epoch>,
     planets: Query<(
         Entity,
@@ -52,15 +57,17 @@ pub fn recalculate(
         &CelestialMass,
         Option<&CelestialParent>,
     )>,
+    masses: Query<&CelestialMass>,
     mut trajectory_simulator: ResMut<TrajectorySimulator>,
-    _settings: Res<SimulatorSettings>,
+    settings: Res<SimulatorSettings>,
     mut recalculate_event_reader: EventReader<RecalculateTrajectory>,
 ) {
-    if recalculate_event_reader.read().count() == 0 {
+    if !settings.auto_recalculate
+        && recalculate_event_reader.read().count() == 0
+    {
         return;
     }
 
-    info!("Recalculating trajectory...");
     let starting_sv = StateVectors::new(
         trajectory_simulator.origin,
         trajectory_simulator.velocity,
@@ -70,18 +77,50 @@ pub fn recalculate(
 
     trajectory_simulator.segments.clear();
 
-    trajectory_simulator.segments.push(TrajectorySegment {
+    let mut segment = TrajectorySegment {
         entry: epoch.0,
         entry_sv: starting_sv.clone(),
         parent,
-    });
+    };
 
-    // Algorithm:
-    // 1. Propagate the segment until: a) it loops around, b) it leaves the SOI, c) it intersects an SOI of a different planet
-    // 2. If:
-    //      a) is true, stop the propagation and add the segment to the list
-    //      b) is true, find SOI exit time and add a second segment with parent of the parent
-    //      c)
+    loop {
+        let central_mass = masses
+            .get(segment.parent)
+            .expect("Missing mass on parent")
+            .0;
+
+        let eccentricity = segment.entry_sv.eccentricity(central_mass);
+
+        if eccentricity < 1.0 {
+            let period = segment.entry_sv.period(central_mass);
+
+            let step = period / PERIOD_SAMPLES as f32;
+
+            for i in 0..PERIOD_SAMPLES {
+                let dt = i as f32 * step;
+
+                let new_sv = segment.entry_sv.propagate_kepler(dt, central_mass, state.tolerance);
+
+                let new_parent = find_soi_at_position(&new_sv, &planets);
+
+                if new_parent != segment.parent {
+                    segment.entry_sv = new_sv;
+                    segment.parent = new_parent;
+                    segment.entry += dt;
+
+                    break;
+                }
+            }
+
+            // Circular or elliptic
+        } else {
+            // Parabolic or hyperbolic
+        }
+
+        trajectory_simulator.segments.push(segment);
+
+        break;
+    }
 }
 
 fn find_soi_at_position(

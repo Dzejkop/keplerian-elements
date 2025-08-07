@@ -6,6 +6,7 @@ use keplerian_elements::utils::{yup2zup, zup2yup};
 use smooth_bevy_cameras::controllers::orbit::OrbitCameraController;
 
 use super::{CelestialBody, FocusMode, State};
+use crate::fmt_utils::VecDisplay;
 use crate::planet::{CelestialMass, CelestialParent};
 use crate::trajectory::{
     RecalculateTrajectory, SimulatorSettings, SimulatorState,
@@ -64,7 +65,7 @@ pub fn render(
     egui::TopBottomPanel::bottom("Bottom").show(ctx, |ui| {
         ui.horizontal(|ui| {
             if let Ok(camera_transform) = camera_transform.get_single() {
-                let translation = camera_transform.translation();
+                let translation = VecDisplay(camera_transform.translation());
                 ui.label(format!("Camera Position: {translation}"));
             }
 
@@ -122,7 +123,6 @@ pub fn render(
 
             ui.label("Velocity");
             vec3_slider(ui, &mut v);
-            ui.label(format!("{:?}", sv.velocity));
 
             sv.velocity =
                 yup2zup(v / (state.distance_scaling * state.velocity_scaling));
@@ -293,6 +293,7 @@ pub fn simulator_window(
     mut egui_context: EguiContexts,
     mut simulator_state: ResMut<SimulatorState>,
     mut simulator: ResMut<TrajectorySimulator>,
+    mut simulator_settings: ResMut<SimulatorSettings>,
     mut recalculate_event_writer: EventWriter<RecalculateTrajectory>,
 ) {
     let ctx = egui_context.ctx_mut();
@@ -318,6 +319,11 @@ pub fn simulator_window(
             if ui.button("Recalculate").clicked() {
                 recalculate_event_writer.send(RecalculateTrajectory);
             }
+
+            ui.toggle_value(
+                &mut simulator_settings.auto_recalculate,
+                "Auto recalculate",
+            );
         });
 }
 

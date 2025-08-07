@@ -14,6 +14,7 @@ const BASE_TOLERANCE: f32 = 0.01;
 
 mod debug_arrows;
 mod draw;
+mod fmt_utils;
 mod planet;
 mod trajectory;
 mod ui;
@@ -31,11 +32,10 @@ fn main() {
         .add_systems(Update, ui::simulator_window)
         .add_systems(Update, ui::simulator_settings_window)
         .add_systems(Update, update::epoch)
-        .add_systems(Update, update::planets)
-        .add_systems(Update, update::planet_scale)
-        .add_systems(Update, update::camera_focus)
-        .add_systems(Update, draw::elliptic_orbits)
-        .add_systems(Update, draw::eccentric_orbits)
+        .add_systems(Update, update::planets_sys)
+        .add_systems(Update, update::planet_scale_sys)
+        .add_systems(Update, update::camera_focus_sys)
+        .add_systems(Update, draw::orbits)
         .add_systems(Update, draw::position_and_velocity)
         .add_systems(Update, draw::axis)
         .add_systems(Update, draw::soi)
@@ -110,7 +110,7 @@ fn setup(
         draw_soi: true,
         draw_axis: true,
         axis_scale: 10000.0,
-        distance_scaling: 1e-9,
+        distance_scaling: 1e-7,
         velocity_scaling: 1e6,
         focus_mode: FocusMode::Sun,
     });
@@ -133,12 +133,11 @@ fn setup(
         .insert(BloomSettings::OLD_SCHOOL)
         .insert(OrbitCameraBundle::new(
             {
-                let mut controller = OrbitCameraController::default();
-
-                controller.mouse_rotate_sensitivity = Vec2::ONE * 1.0;
-                controller.mouse_translate_sensitivity = Vec2::ONE * 10.0;
-
-                controller
+                OrbitCameraController {
+                    mouse_rotate_sensitivity: Vec2::ONE * 1.0,
+                    mouse_translate_sensitivity: Vec2::ONE * 10.0,
+                    ..OrbitCameraController::default()
+                }
             },
             Vec3::new(-2.0, 5.0, 5.0),
             Vec3::new(0., 0., 0.),
@@ -194,6 +193,31 @@ fn spawn_kerbol_system(
         })
     };
 
+    let _moho = commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::RED),
+            ..Default::default()
+        })
+        .insert(CelestialBody::from_elements(
+            KeplerianElements {
+                semi_major_axis: 5_263_138_304.0,
+                eccentricity: 0.2,
+                inclination: f32::to_radians(7.0),
+                right_ascension_of_the_ascending_node: 70.0,
+                argument_of_periapsis: 15.0,
+                mean_anomaly_at_epoch: 3.14,
+                epoch: 0.0, // Example epoch year
+            },
+            kerbol_mass,
+            BASE_TOLERANCE,
+        ))
+        .insert(CelestialMass(2.5263314e21))
+        .insert(CelestialParent(kerbol))
+        .insert(CelestialRadius(250_000.0))
+        .insert(Name::new("Moho"))
+        .id();
+
     let kerbin_mass = 5.2915158e22;
     let kerbin = commands
         .spawn(PbrBundle {
@@ -243,4 +267,28 @@ fn spawn_kerbol_system(
         .insert(CelestialMass(9.7599066e20))
         .insert(CelestialRadius(200_000.0))
         .insert(Name::new("Mun"));
+
+    commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::BLUE),
+            ..Default::default()
+        })
+        .insert(CelestialBody::from_elements(
+            KeplerianElements {
+                semi_major_axis: 47_000_000.0,
+                eccentricity: 0.0,
+                inclination: 6.0,
+                right_ascension_of_the_ascending_node: 0.0,
+                argument_of_periapsis: 48.0,
+                mean_anomaly_at_epoch: 0.9,
+                epoch: 0.0, // Example epoch year
+            },
+            kerbin_mass,
+            BASE_TOLERANCE,
+        ))
+        .insert(CelestialParent(kerbin))
+        .insert(CelestialMass(2.6457580e19))
+        .insert(CelestialRadius(60_000.0))
+        .insert(Name::new("Minmus"));
 }

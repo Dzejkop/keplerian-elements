@@ -12,7 +12,7 @@ pub fn epoch(time: Res<Time>, mut epoch: ResMut<Epoch>, state: Res<State>) {
     }
 }
 
-pub fn planets(
+pub fn planets_sys(
     planet_entities: Query<Entity, With<CelestialBody>>,
     mut planets: Query<&mut CelestialBody>,
     mut transforms: Query<&mut Transform>,
@@ -66,7 +66,7 @@ pub fn planets(
     }
 }
 
-pub fn planet_scale(
+pub fn planet_scale_sys(
     state: Res<State>,
     mut items: Query<(&mut Transform, &CelestialRadius)>,
 ) {
@@ -75,7 +75,7 @@ pub fn planet_scale(
     }
 }
 
-pub fn camera_focus(
+pub fn camera_focus_sys(
     mut look_transform: Query<&mut LookTransform>,
     state: Res<State>,
     planets: Query<(&GlobalTransform, &Name), With<CelestialBody>>,
