@@ -218,6 +218,31 @@ fn spawn_kerbol_system(
         .insert(Name::new("Moho"))
         .id();
 
+    let _eve = commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::PINK),
+            ..Default::default()
+        })
+        .insert(CelestialBody::from_elements(
+            KeplerianElements {
+                semi_major_axis: 9_832_684_544.0,
+                eccentricity: 0.01,
+                inclination: f32::to_radians(2.1),
+                right_ascension_of_the_ascending_node: f32::to_radians(15.0),
+                argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch: 3.14,
+                epoch: 0.0,
+            },
+            kerbol_mass,
+            BASE_TOLERANCE,
+        ))
+        .insert(CelestialMass(1.224398e23))
+        .insert(CelestialParent(kerbol))
+        .insert(CelestialRadius(700_000.0))
+        .insert(Name::new("Eve"))
+        .id();
+
     let kerbin_mass = 5.2915158e22;
     let kerbin = commands
         .spawn(PbrBundle {
@@ -244,7 +269,7 @@ fn spawn_kerbol_system(
         .insert(Name::new("Kerbin"))
         .id();
 
-    commands
+    let _mun = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
             material: planet_material(Color::GRAY),
@@ -268,7 +293,7 @@ fn spawn_kerbol_system(
         .insert(CelestialRadius(200_000.0))
         .insert(Name::new("Mun"));
 
-    commands
+    let _minmus = commands
         .spawn(PbrBundle {
             mesh: sphere.clone(),
             material: planet_material(Color::PURPLE),
@@ -291,4 +316,79 @@ fn spawn_kerbol_system(
         .insert(CelestialMass(2.6457580e19))
         .insert(CelestialRadius(60_000.0))
         .insert(Name::new("Minmus"));
+
+    let _duna = commands
+        .spawn(PbrBundle {
+            mesh: sphere.clone(),
+            material: planet_material(Color::RED),
+            ..Default::default()
+        })
+        .insert(CelestialBody::from_elements(
+            KeplerianElements {
+                semi_major_axis: 20_726_155_264.0,
+                eccentricity: 0.051,
+                inclination: f32::to_radians(0.06),
+                right_ascension_of_the_ascending_node: f32::to_radians(135.5),
+                argument_of_periapsis: 0.0,
+                mean_anomaly_at_epoch: 3.14,
+                epoch: 0.0,
+            },
+            kerbol_mass,
+            BASE_TOLERANCE,
+        ))
+        .insert(CelestialMass(4.5154e21))
+        .insert(CelestialParent(kerbol))
+        .insert(CelestialRadius(320_000.0))
+        .insert(Name::new("Duna"))
+        .id();
+
+    // let _dres = commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::GRAY),
+    //         ..Default::default()
+    //     })
+    //     .insert(CelestialBody::from_elements(
+    //         KeplerianElements {
+    //             semi_major_axis: 40_839_348_203.0,
+    //             eccentricity: 0.145,
+    //             inclination: f32::to_radians(5.0),
+    //             right_ascension_of_the_ascending_node: f32::to_radians(280.0),
+    //             argument_of_periapsis: f32::to_radians(90.0),
+    //             mean_anomaly_at_epoch: 3.14,
+    //             epoch: 0.0,
+    //         },
+    //         kerbol_mass,
+    //         BASE_TOLERANCE,
+    //     ))
+    //     .insert(CelestialMass(3.219e20))
+    //     .insert(CelestialParent(kerbin))
+    //     .insert(CelestialRadius(138_000.0))
+    //     .insert(Name::new("Dres"))
+    //     .id();
+
+    // let _jool = commands
+    //     .spawn(PbrBundle {
+    //         mesh: sphere.clone(),
+    //         material: planet_material(Color::BLUE),
+    //         ..Default::default()
+    //     })
+    //     .insert(CelestialBody::from_elements(
+    //         KeplerianElements {
+    //             semi_major_axis: 68_775_000_000.0,
+    //             eccentricity: 0.0,
+    //             inclination: f32::to_radians(1.3),
+    //             right_ascension_of_the_ascending_node: 0.0,
+    //             argument_of_periapsis: 0.0,
+    //             mean_anomaly_at_epoch: 0.0,
+    //             epoch: 0.0,
+    //         },
+    //         kerbol_mass,
+    //         BASE_TOLERANCE,
+    //     ))
+    //     .insert(CelestialMass(1.128e23))
+    //     .insert(CelestialParent(kerbin))
+    //     .insert(CelestialRadius(950_000.0))
+    //     .insert(Name::new("Jool"))
+    //     .id();
 }
